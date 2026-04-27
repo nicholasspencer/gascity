@@ -57,9 +57,9 @@ external observers (witness, mayor) only catch on a slow patrol cycle.
 ```bash
 CURRENT_WISP=${GC_BEAD_ID:-}
 if [ -z "$CURRENT_WISP" ]; then
-  CURRENT_WISP=$(gc bd list --assignee="$GC_AGENT" --status=in_progress --type=wisp --limit=1 --json | jq -r '.[0].id // empty')
+  CURRENT_WISP=$({{ cmd }} bd list --assignee="$GC_AGENT" --status=in_progress --type=wisp --limit=1 --json | jq -r '.[0].id // empty')
 fi
-NEXT=$(gc bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }} --json | jq -r '.new_epic_id // empty')
+NEXT=$({{ cmd }} bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }} --json | jq -r '.new_epic_id // empty')
 if [ -z "$NEXT" ]; then
   echo "Could not pour next refinery wisp; not burning."
   exit 1
@@ -69,7 +69,7 @@ if ! gc bd update "$NEXT" --assignee="$GC_AGENT"; then
   exit 1
 fi
 if [ -n "$CURRENT_WISP" ]; then
-  gc bd mol burn "$CURRENT_WISP" --force
+  {{ cmd }} bd mol burn "$CURRENT_WISP" --force
 else
   echo "Could not resolve current wisp; not burning."
   exit 1
@@ -102,9 +102,9 @@ assign the next wisp, burn the current wisp, THEN request restart**:
 ```bash
 CURRENT_WISP=${GC_BEAD_ID:-}
 if [ -z "$CURRENT_WISP" ]; then
-  CURRENT_WISP=$(gc bd list --assignee="$GC_AGENT" --status=in_progress --type=wisp --limit=1 --json | jq -r '.[0].id // empty')
+  CURRENT_WISP=$({{ cmd }} bd list --assignee="$GC_AGENT" --status=in_progress --type=wisp --limit=1 --json | jq -r '.[0].id // empty')
 fi
-NEXT=$(gc bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }} --json | jq -r '.new_epic_id // empty')
+NEXT=$({{ cmd }} bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }} --json | jq -r '.new_epic_id // empty')
 if [ -z "$NEXT" ]; then
   echo "Could not pour next refinery wisp; not requesting restart."
   exit 1
@@ -114,18 +114,18 @@ if ! gc bd update "$NEXT" --assignee="$GC_AGENT"; then
   exit 1
 fi
 if [ -n "$CURRENT_WISP" ]; then
-  gc bd mol burn "$CURRENT_WISP" --force
+  {{ cmd }} bd mol burn "$CURRENT_WISP" --force
 else
   echo "Could not resolve current wisp; not requesting restart."
   exit 1
 fi
-gc runtime request-restart
+{{ cmd }} runtime request-restart
 RESTART_STATUS=$?
 echo "Restart request returned with status $RESTART_STATUS; stop this session now."
 exit "$RESTART_STATUS"
 ```
 
-`gc runtime request-restart` sets `GC_RESTART_REQUESTED` metadata and blocks
+`{{ cmd }} runtime request-restart` sets `GC_RESTART_REQUESTED` metadata and blocks
 until the controller stops this session; on controller fault it can return
 nonzero after a bounded timeout. If it returns for any reason, stop immediately
 from this old session. Do not check mail, close this step, or process merge work
@@ -152,7 +152,7 @@ without catching the mismatch (upstream #1833).
 # (e.g. controller restart, host wake, claim race). Their branch ships
 # but you never see the mail. Scan metadata for orphans before the
 # normal patrol — these are real merge candidates that need rescuing.
-ORPHANS=$(gc bd list --metadata-field gc.routed_to="${GC_RIG:+$GC_RIG/}{{ .BindingPrefix }}refinery" --status=open --json 2>/dev/null \
+ORPHANS=$({{ cmd }} bd list --metadata-field gc.routed_to="${GC_RIG:+$GC_RIG/}{{ .BindingPrefix }}refinery" --status=open --json 2>/dev/null \
   | jq -r '.[] | select(.metadata.branch != null) | .id')
 for ORPHAN in $ORPHANS; do
   echo "orphan-merge candidate: $ORPHAN"
@@ -162,11 +162,11 @@ for ORPHAN in $ORPHANS; do
 done
 
 # Step 1: Check for an in-progress patrol wisp
-gc bd list --assignee="$GC_AGENT" --status=in_progress
+{{ cmd }} bd list --assignee="$GC_AGENT" --status=in_progress
 
 # If none found, pour one (root-only — no child step beads) and assign it
-WISP=$(gc bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }} --json | jq -r '.new_epic_id')
-gc bd update "$WISP" --assignee="$GC_AGENT"
+WISP=$({{ cmd }} bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }} --json | jq -r '.new_epic_id')
+{{ cmd }} bd update "$WISP" --assignee="$GC_AGENT"
 ```
 
 Then follow the formula. The step descriptions below are your instructions —
@@ -206,10 +206,10 @@ Polecats set these metadata fields before assigning a work bead to you:
 
 Read them mechanically:
 ```bash
-gc bd show $WORK --json | jq -r '.[0].metadata.branch'
-gc bd show $WORK --json | jq -r '.[0].metadata.target // "{{ .DefaultBranch }}"'
-gc bd show $WORK --json | jq -r '.[0].metadata.merge_strategy // "direct"'
-gc bd show $WORK --json | jq -r '.[0].metadata.existing_pr // empty'
+{{ cmd }} bd show $WORK --json | jq -r '.[0].metadata.branch'
+{{ cmd }} bd show $WORK --json | jq -r '.[0].metadata.target // "{{ .DefaultBranch }}"'
+{{ cmd }} bd show $WORK --json | jq -r '.[0].metadata.merge_strategy // "direct"'
+{{ cmd }} bd show $WORK --json | jq -r '.[0].metadata.existing_pr // empty'
 ```
 
 Never infer a branch name. If `metadata.branch` is missing, reject the bead.
@@ -218,7 +218,7 @@ Never infer a branch name. If `metadata.branch` is missing, reject the bead.
 
 On rebase conflict or test failure:
 1. Put work bead back in pool:
-   `gc bd update $WORK --status=open --assignee="" --set-metadata rejection_reason="..."`
+   `{{ cmd }} bd update $WORK --status=open --assignee="" --set-metadata rejection_reason="..."`
 2. Branch handling depends on failure type:
    - Conflict: leave branch intact (polecat needs it for rebase)
    - Test failure: delete branch (polecat redoes work)
@@ -228,12 +228,12 @@ A new polecat picks up the bead, sees `metadata.branch` and
 `metadata.rejection_reason`, rebases or redoes work, reassigns to refinery.
 
 **On the next merge of a previously-rejected bead, clear
-`rejection_reason` before `gc bd close`.** A bead carrying both a
+`rejection_reason` before `{{ cmd }} bd close`.** A bead carrying both a
 "closed merged" status and a stale `rejection_reason` is internally
 contradictory — downstream tooling that reads `metadata.rejection_reason`
 to surface "this bead failed" can't tell the rejection has been
 resolved. The formula's `merge-push` step chains `--unset-metadata
-rejection_reason` into each terminal `gc bd update` before `gc bd
+rejection_reason` into each terminal `{{ cmd }} bd update` before `{{ cmd }} bd
 close`; do not split the chain, and do not skip the unset because the
 bead's previous rejection looks like ancient history. The cost of the
 unset is one CLI flag; the cost of leaving it set is a permanent
@@ -268,9 +268,9 @@ and then ignored by landing directly to the target branch.
 ## Communication
 
 ```bash
-gc mail inbox                                          # Check for messages
+{{ cmd }} mail inbox                                          # Check for messages
 gc session nudge {{ .RigName }}/{{ .BindingPrefix }}<polecat-suffix> "Run gc hook; it checks assigned work before routed pool work"
-gc mail send mayor/ -s "ESCALATION: ..." -m "..."      # Escalate (mail — must survive)
+{{ cmd }} mail send mayor/ -s "ESCALATION: ..." -m "..."      # Escalate (mail — must survive)
 ```
 
 Use the bare polecat suffix after the binding prefix; Gastown's default
@@ -286,7 +286,7 @@ work still arrives through bead assignment or pool routing.
 
 MERGE_FAILED notifications are routine signals — the rejection metadata on
 the bead (`rejection_reason`) is the durable record. Use `gc session nudge` to
-alert the witness, not `gc mail send`.
+alert the witness, not `{{ cmd }} mail send`.
 
 ---
 
@@ -296,14 +296,14 @@ alert the witness, not `gc mail send`.
 
 | Want to... | Correct command |
 |------------|----------------|
-| Pour next wisp | `gc bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }}` |
+| Pour next wisp | `{{ cmd }} bd mol wisp mol-refinery-patrol --root-only --var target_branch={{ .DefaultBranch }} --var rig_name={{ .RigName }} --var binding_prefix={{ .BindingPrefix }}` |
 | Burn current wisp | Follow Patrol Lifecycle Discipline Rule 1: pour next wisp, validate `NEXT`, assign it to `$GC_AGENT`, then burn `$CURRENT_WISP`. Never run a standalone burn. |
-| Find assigned work | `gc bd list --assignee="$GC_AGENT" --status=open` |
-| Snapshot event position | `gc events --seq` |
-| Wait for assignment | `gc events --watch --type=bead.updated --after=$SEQ` |
-| Read work metadata | `gc bd show $WORK --json \| jq '.[0].metadata'` |
-| Set metadata field | `gc bd update $WORK --set-metadata key=value` |
-| Remove metadata field | `gc bd update $WORK --unset-metadata key` |
+| Find assigned work | `{{ cmd }} bd list --assignee="$GC_AGENT" --status=open` |
+| Snapshot event position | `{{ cmd }} events --seq` |
+| Wait for assignment | `{{ cmd }} events --watch --type=bead.updated --after=$SEQ` |
+| Read work metadata | `{{ cmd }} bd show $WORK --json \| jq '.[0].metadata'` |
+| Set metadata field | `{{ cmd }} bd update $WORK --set-metadata key=value` |
+| Remove metadata field | `{{ cmd }} bd update $WORK --unset-metadata key` |
 | Fetch remote branches | `git fetch --prune origin` |
 | Rebase on target | `git rebase origin/$TARGET` |
 | Fast-forward merge | `git merge --ff-only temp` |

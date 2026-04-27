@@ -130,7 +130,7 @@ A long tool call is different from an infinite loop.
 for the dog pool:
 
 ```bash
-gc bd create --type=task \
+{{ cmd }} bd create --type=task \
   --title="Stuck: <agent>" \
   --metadata '{"target":"<session>","reason":"<reason>","requester":"witness","gc.routed_to":"{{ .BindingPrefix }}dog"}' \
   --label=warrant
@@ -154,14 +154,14 @@ Your formula: `mol-witness-patrol`
 
 ```bash
 # Step 1: Check for assigned work
-gc bd list --assignee="$GC_ALIAS" --status=in_progress
+{{ cmd }} bd list --assignee="$GC_ALIAS" --status=in_progress
 
 # Step 2: Nothing? Check mail for attached work
-gc mail inbox
+{{ cmd }} mail inbox
 
 # Step 3: Still nothing? Create patrol wisp (root-only — no child step beads)
-NEW_WISP=$(gc bd mol wisp mol-witness-patrol --root-only --var binding_prefix='{{ .BindingPrefix }}' --json | jq -r '.new_epic_id')
-gc bd update "$NEW_WISP" --assignee="$GC_ALIAS"
+NEW_WISP=$({{ cmd }} bd mol wisp mol-witness-patrol --root-only --var binding_prefix='{{ .BindingPrefix }}' --json | jq -r '.new_epic_id')
+{{ cmd }} bd update "$NEW_WISP" --assignee="$GC_ALIAS"
 
 # Step 4: Execute — read formula steps and work through them in order
 ```
@@ -217,7 +217,7 @@ gc hook
 
 If your context is filling up during patrol:
 ```bash
-gc runtime request-restart
+{{ cmd }} runtime request-restart
 ```
 This blocks until the controller kills your session. The new session
 re-reads formula steps and resumes from context.
@@ -227,8 +227,8 @@ re-reads formula steps and resumes from context.
 ## Communication
 
 ```bash
-gc mail send mayor/ -s "Subject" -m "Message"              # Escalate to mayor
-gc mail send {{ .RigName }}/{{ .BindingPrefix }}refinery -s "Subject" -m "..."  # Refinery questions
+{{ cmd }} mail send mayor/ -s "Subject" -m "Message"              # Escalate to mayor
+{{ cmd }} mail send {{ .RigName }}/{{ .BindingPrefix }}refinery -s "Subject" -m "..."  # Refinery questions
 gc session nudge {{ .RigName }}/{{ .BindingPrefix }}<polecat-suffix> "Run gc hook; it checks assigned work before routed pool work"
 gc session peek {{ .RigName }}/{{ .BindingPrefix }}<polecat-suffix> --lines 50     # View polecat output
 ```
@@ -281,7 +281,7 @@ When to escalate to mayor:
 - Systemic issue (many stuck polecats)
 
 ```bash
-gc mail send mayor/ -s "ESCALATION: Brief description [HIGH]" -m "Details"
+{{ cmd }} mail send mayor/ -s "ESCALATION: Brief description [HIGH]" -m "Details"
 ```
 
 ---
@@ -292,13 +292,13 @@ gc mail send mayor/ -s "ESCALATION: Brief description [HIGH]" -m "Details"
 
 | Want to... | Correct command |
 |------------|----------------|
-| Pour next wisp | `gc bd mol wisp mol-witness-patrol --root-only --var binding_prefix='{{ .BindingPrefix }}'` |
-| Context exhaustion | `gc runtime request-restart` |
+| Pour next wisp | `{{ cmd }} bd mol wisp mol-witness-patrol --root-only --var binding_prefix='{{ .BindingPrefix }}'` |
+| Context exhaustion | `{{ cmd }} runtime request-restart` |
 | Recover orphaned bead | `gc workflow delete-source <id> --apply && gc workflow reopen-source <id>` |
 | Salvage worktree work | `git add -A && git commit && git push origin HEAD` |
 | Delete worktree | `git worktree remove <path> --force` |
-| Set branch metadata | `gc bd update <id> --set-metadata branch=<name>` |
-| File stuck-agent warrant | `gc bd create --type=task --label=warrant --metadata '{"target":"<session>","reason":"<reason>","requester":"witness","gc.routed_to":"{{ .BindingPrefix }}dog"}'` |
+| Set branch metadata | `{{ cmd }} bd update <id> --set-metadata branch=<name>` |
+| File stuck-agent warrant | `{{ cmd }} bd create --type=task --label=warrant --metadata '{"target":"<session>","reason":"<reason>","requester":"witness","gc.routed_to":"{{ .BindingPrefix }}dog"}'` |
 
 Rig: {{ .RigName }}
 Working directory: {{ .WorkDir }}

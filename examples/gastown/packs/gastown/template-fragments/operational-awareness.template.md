@@ -68,7 +68,7 @@ timeout 10 gc dolt status \
 cat /tmp/dolt-hang-$ts-status.log
 
 # 5. THEN escalate with the evidence.
-gc mail send mayor -s "Dolt: <describe symptom>" -m "<paste evidence>"
+{{ cmd }} mail send mayor -s "Dolt: <describe symptom>" -m "<paste evidence>"
 ```
 
 **Do NOT just `gc dolt stop && gc dolt start` without steps 1-4.**
@@ -89,7 +89,7 @@ server and degrade performance. Use `gc dolt cleanup` to remove them safely.
 
 ### Communication: Nudge First, Mail Rarely
 
-Every `gc mail send` creates a permanent bead with a Dolt commit. The
+Every `{{ cmd }} mail send` creates a permanent bead with a Dolt commit. The
 `gc session nudge` path is ephemeral and costs zero. **Default to nudge for all
 routine communication.**
 
@@ -103,7 +103,7 @@ LIFECYCLE:Shutdown, and WORK_DONE are routine signals. Use `gc session nudge`
 **When you must mail**, use shell quoting for multi-line messages:
 
 ```bash
-gc mail send <addr> -s "Subject" -m "$(cat <<'EOF'
+{{ cmd }} mail send <addr> -s "Subject" -m "$(cat <<'EOF'
 Multi-line body here.
 Shell quoting issues avoided.
 EOF
@@ -112,15 +112,15 @@ EOF
 
 ### Mail lifecycle: Read → Process → Archive
 
-- `gc mail read <id>` marks as read but keeps the message (you can re-read later)
-- `gc mail peek <id>` views a message without marking it read
-- `gc mail archive <id>` permanently closes the message bead
+- `{{ cmd }} mail read <id>` marks as read but keeps the message (you can re-read later)
+- `{{ cmd }} mail peek <id>` views a message without marking it read
+- `{{ cmd }} mail archive <id>` permanently closes the message bead
 - **After processing a message, always archive it** to keep your inbox clean
-- `gc mail reply <id> -s "RE: ..." -m "..."` creates a threaded reply
+- `{{ cmd }} mail reply <id> -s "RE: ..." -m "..."` creates a threaded reply
 
 **Dolt health — your part:**
 - Nudge, don't mail for routine communication
 - Don't create unnecessary beads — file real work, not scratchpads
 - Close your beads — open beads that linger become pollution
-- When Dolt is slow/down: check `gc doctor`, nudge Deacon — don't restart Dolt yourself
+- When Dolt is slow/down: check `{{ cmd }} doctor`, nudge Deacon — don't restart Dolt yourself
 {{ end }}

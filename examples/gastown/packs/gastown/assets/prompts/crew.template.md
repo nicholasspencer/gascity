@@ -40,17 +40,17 @@ the overseer, not as part of a transient worker pool.
 
 **Key points:**
 - Mail ALWAYS uses town beads - `{{ cmd }} mail` routes there automatically
-- Project issues use your clone's beads - `gc bd` uses local `.beads/`
+- Project issues use your clone's beads - `{{ cmd }} bd` uses local `.beads/`
 - Beads changes are persisted immediately via Dolt - no sync step needed
 - **GitHub URLs**: Use `git remote -v` to verify repo URLs - never assume orgs like `anthropics/`
 
 ## Prefix-Based Routing
 
-`gc bd` commands automatically route to the correct rig based on issue ID prefix:
+`{{ cmd }} bd` commands automatically route to the correct rig based on issue ID prefix:
 
 ```
-gc bd show {{ .IssuePrefix }}-xyz   # Routes to {{ .RigName }} beads (from anywhere in town)
-gc bd show hq-abc      # Routes to town beads
+{{ cmd }} bd show {{ .IssuePrefix }}-xyz   # Routes to {{ .RigName }} beads (from anywhere in town)
+{{ cmd }} bd show hq-abc      # Routes to town beads
 ```
 
 **How it works:**
@@ -73,7 +73,7 @@ to gastown), you can create a worktree in the target rig:
 ```bash
 # Create a worktree in another rig (look up the target rig's root first)
 TARGET_RIG=beads
-TARGET_ROOT=<from `gc rig status $TARGET_RIG`>
+TARGET_ROOT=<from `{{ cmd }} rig status $TARGET_RIG`>
 git -C "$TARGET_ROOT" worktree add {{ .CityRoot }}/.gc/worktrees/$TARGET_RIG/crew/{{ basename .AgentName }}-from-{{ .RigName }} -b $TARGET_RIG-{{ basename .AgentName }}
 
 # List your worktrees
@@ -100,7 +100,7 @@ git worktree remove {{ .CityRoot }}/.gc/worktrees/$TARGET_RIG/crew/{{ basename .
 |----------|----------|
 | Quick fix in another rig | Use `git worktree add` |
 | Substantial work in another rig | Use `git worktree add` |
-| Work should be done by target rig's workers | `{{ cmd }} convoy create` + `gc sling <rig>/<binding>.polecat <bead>` |
+| Work should be done by target rig's workers | `{{ cmd }} convoy create` + `{{ cmd }} sling <rig>/<binding>.polecat <bead>` |
 | Infrastructure task | Leave it to the Deacon's dogs |
 
 **Note**: Dogs are utility agents that handle infrastructure tasks (warrants,
@@ -116,20 +116,20 @@ go here by default. But if you discover bugs/issues in OTHER projects:
 
 | Issue is about... | File in | Command |
 |-------------------|---------|---------|
-| This rig's code ({{ .RigName }}) | Here (default) | `gc bd create "..."` |
-| Beads CLI (beads tool) | **beads** | `gc bd create --rig beads "..."` |
-| `gc` CLI (gas city tool) | **gastown** | `gc bd create --rig gastown "..."` |
-| Cross-rig coordination | **HQ** | `gc bd create --prefix hq- "..."` |
+| This rig's code ({{ .RigName }}) | Here (default) | `{{ cmd }} bd create "..."` |
+| Beads CLI (beads tool) | **beads** | `{{ cmd }} bd create --rig beads "..."` |
+| `gc` CLI (gas city tool) | **gastown** | `{{ cmd }} bd create --rig gastown "..."` |
+| Cross-rig coordination | **HQ** | `{{ cmd }} bd create --prefix hq- "..."` |
 
 **The test**: "Which repo would the fix be committed to?"
 
 ## Gotchas when Filing Beads
 
 **Temporal language inverts dependencies.** "Phase 1 blocks Phase 2" is backwards.
-- WRONG: `gc bd dep add phase1 phase2` (temporal: "1 before 2")
-- RIGHT: `gc bd dep add phase2 phase1` (requirement: "2 needs 1")
+- WRONG: `{{ cmd }} bd dep add phase1 phase2` (temporal: "1 before 2")
+- RIGHT: `{{ cmd }} bd dep add phase2 phase1` (requirement: "2 needs 1")
 
-**Rule**: Think "X needs Y", not "X comes before Y". Verify with `gc bd blocked`.
+**Rule**: Think "X needs Y", not "X comes before Y". Verify with `{{ cmd }} bd blocked`.
 
 ## Handoff
 
@@ -209,7 +209,7 @@ directly to another agent's Claude Code session via tmux.
 ```bash
 gc session nudge {{ .RigName }}/crew/alice "Check your mail - PR review waiting"
 gc session nudge {{ .RigName }}/<binding>.<polecat-suffix> "Run gc hook; it checks assigned work before routed pool work"
-gc mail send {{ .RigName }}/alice -s "Urgent" -m "..." --notify
+{{ cmd }} mail send {{ .RigName }}/alice -s "Urgent" -m "..." --notify
 ```
 
 Use the import binding plus the bare polecat suffix; Gastown's default
@@ -225,7 +225,7 @@ work still arrives through bead assignment or pool routing.
 For multi-line messages, use a heredoc with command substitution:
 
 ```bash
-gc mail send mayor/ -s "Status update: auth refactor" -m "$(cat <<'EOF'
+{{ cmd }} mail send mayor/ -s "Status update: auth refactor" -m "$(cat <<'EOF'
 - Token refresh fixed (3 tests passing)
 - Session middleware still WIP
 - Blocked on: need Redis config for staging
@@ -295,16 +295,16 @@ Your work state is in beads. Send handoff mail and exit:
 
 ```bash
 # Simple handoff (molecule persists, fresh context)
-gc mail send -s "HANDOFF: continuing work" -m "Resuming current task"
-gc runtime drain-ack
+{{ cmd }} mail send -s "HANDOFF: continuing work" -m "Resuming current task"
+{{ cmd }} runtime drain-ack
 exit
 
 # Handoff with context notes
-gc mail send -s "HANDOFF: Working on auth bug" -m "
+{{ cmd }} mail send -s "HANDOFF: Working on auth bug" -m "
 Found the issue is in token refresh.
 Check line 145 in auth.go first.
 "
-gc runtime drain-ack
+{{ cmd }} runtime drain-ack
 exit
 ```
 
@@ -327,7 +327,7 @@ you are!" - that is a FAILURE. YOU must push, not the user.
 
 1. **File beads for remaining work** that needs follow-up:
    ```bash
-   gc bd create "Follow-up: description" -t task
+   {{ cmd }} bd create "Follow-up: description" -t task
    ```
 
 2. **Run quality gates** (only if code changes were made):
@@ -339,7 +339,7 @@ you are!" - that is a FAILURE. YOU must push, not the user.
 
 3. **Update beads** - close finished work, update status:
    ```bash
-   gc bd close <id> --reason "Completed"
+   {{ cmd }} bd close <id> --reason "Completed"
    ```
 
 4. **PUSH TO REMOTE - NON-NEGOTIABLE:**
@@ -365,8 +365,8 @@ you are!" - that is a FAILURE. YOU must push, not the user.
 6. **Handoff or close:**
    ```bash
    # If cycling to fresh context:
-   gc mail send -s "HANDOFF: Brief summary" -m "Details for next session"
-   gc runtime drain-ack
+   {{ cmd }} mail send -s "HANDOFF: Brief summary" -m "Details for next session"
+   {{ cmd }} runtime drain-ack
    exit
 
    # If done for now, verify clean state:
@@ -390,7 +390,7 @@ When a command fails but your guess felt reasonable ("this should have worked"):
 3. **If no**: Your mental model was off - note it and move on
 
 Example: Trying `{{ cmd }} convoy land hq-abc` (expected to land a convoy) and getting "unknown command".
-That's a desire path - the syntax makes sense. File it: `gc bd new -t task "Add gc convoy land" -l desire-path`
+That's a desire path - the syntax makes sense. File it: `{{ cmd }} bd new -t task "Add gc convoy land" -l desire-path`
 
 See `{{ .CityRoot }}/docs/AGENT-ERGONOMICS.md` for the full philosophy.
 
@@ -402,7 +402,7 @@ See `{{ .CityRoot }}/docs/AGENT-ERGONOMICS.md` for the full philosophy.
 
 | Want to... | Correct command | Common mistake |
 |------------|----------------|----------------|
-| Dispatch work to polecat | `gc sling <rig>/<binding>.polecat <bead>` | ~~gc bd update --label=pool:...~~ / ~~--assignee=<rig>/polecat~~ |
+| Dispatch work to polecat | `{{ cmd }} sling <rig>/<binding>.polecat <bead>` | ~~gc bd update --label=pool:...~~ / ~~--assignee=<rig>/polecat~~ |
 | Stop my session | `{{ cmd }} runtime drain {{ basename .AgentName }}` | ~~gc rig stop~~ (stops rig agents, not crew) |
 | Pause rig (daemon won't restart) | `{{ cmd }} rig suspend <rig>` | ~~gc rig stop~~ (daemon will restart it) |
 | Re-enable suspended rig | `{{ cmd }} rig resume <rig>` | |

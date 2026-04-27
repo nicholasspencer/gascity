@@ -20,10 +20,10 @@ You CAN and SHOULD edit code when it's the fastest path. The key is balance.
 When you file a bead, default to immediately dispatching it to a polecat:
 
 ```bash
-gc bd create "Fix the auth timeout bug" -t task --json   # file it
+{{ cmd }} bd create "Fix the auth timeout bug" -t task --json   # file it
 TARGET_RIG="${GC_RIG:-}"  # set to the target rig, or leave empty in an HQ-only city
 POLECAT_TARGET="${TARGET_RIG:+$TARGET_RIG/}{{ .BindingPrefix }}polecat"
-gc sling "$POLECAT_TARGET" <bead-id>                     # dispatch to polecat pool (sets gc.routed_to metadata for controller scale_check)
+{{ cmd }} sling "$POLECAT_TARGET" <bead-id>                     # dispatch to polecat pool (sets gc.routed_to metadata for controller scale_check)
 ```
 
 **Pool dispatch leaves the assignee empty.** The polecat that picks the bead up sets the
@@ -70,7 +70,7 @@ Use these locations consistently:
 | Location | Use for |
 |----------|---------|
 | `{{ .WorkDir }}` | Your own coordination home, runtime files, scratch notes |
-| `{{ .CityRoot }}` | `{{ cmd }} mail`, coordination commands, `gc bd` with `hq-` prefix |
+| `{{ .CityRoot }}` | `{{ cmd }} mail`, coordination commands, `{{ cmd }} bd` with `hq-` prefix |
 | configured rig repo root (`{{ cmd }} rig status <rig>`) | **ALL git/code operations** for that rig via `git -C` |
 | `{{ .CityRoot }}/.gc/worktrees/<rig>/...` | Agent sandboxes/worktrees — don't use these directly |
 
@@ -93,11 +93,11 @@ Never work in another agent's worktree. Use the configured rig repo root with
 
 ## Prefix-Based Routing
 
-`gc bd` commands automatically route to the correct rig based on issue ID prefix:
+`{{ cmd }} bd` commands automatically route to the correct rig based on issue ID prefix:
 
 ```
-gc bd show {{ .IssuePrefix }}-xyz   # Routes to {{ .RigName }} beads (from anywhere in town)
-gc bd show hq-abc      # Routes to town beads
+{{ cmd }} bd show {{ .IssuePrefix }}-xyz   # Routes to {{ .RigName }} beads (from anywhere in town)
+{{ cmd }} bd show hq-abc      # Routes to town beads
 ```
 
 **How it works:**
@@ -107,7 +107,7 @@ gc bd show hq-abc      # Routes to town beads
 
 **Debug routing:** `BD_DEBUG_ROUTING=1 gc bd show <id>`
 
-**Conflicts:** If two rigs share a prefix, use `gc bd rename-prefix <new>` to fix.
+**Conflicts:** If two rigs share a prefix, use `{{ cmd }} bd rename-prefix <new>` to fix.
 
 ## Where to File Beads - Create issues (CRITICAL)
 
@@ -115,14 +115,14 @@ gc bd show hq-abc      # Routes to town beads
 
 | Issue is about... | File in | Command |
 |-------------------|---------|---------|
-| Beads CLI (tool bugs, features, docs) | **beads** | `gc bd create --rig beads "..."` |
-| `gc` CLI (gas city tool bugs, features) | **gastown** | `gc bd create --rig gastown "..."` |
-| Polecat/witness/refinery/convoy code | **gastown** | `gc bd create --rig gastown "..."` |
-| Wyvern game features | **wyvern** | `gc bd create --rig wyvern "..."` |
-| Cross-rig coordination, convoys, mail threads | **HQ** | `gc bd create "..."` (default) |
-| Agent role descriptions, assignments | **HQ** | `gc bd create "..."` (default) |
+| Beads CLI (tool bugs, features, docs) | **beads** | `{{ cmd }} bd create --rig beads "..."` |
+| `gc` CLI (gas city tool bugs, features) | **gastown** | `{{ cmd }} bd create --rig gastown "..."` |
+| Polecat/witness/refinery/convoy code | **gastown** | `{{ cmd }} bd create --rig gastown "..."` |
+| Wyvern game features | **wyvern** | `{{ cmd }} bd create --rig wyvern "..."` |
+| Cross-rig coordination, convoys, mail threads | **HQ** | `{{ cmd }} bd create "..."` (default) |
+| Agent role descriptions, assignments | **HQ** | `{{ cmd }} bd create "..."` (default) |
 
-**IMPORTANT: File issues with `gc bd create`.** There is no `{{ cmd }} issue` or `{{ cmd }} issues` namespace here. Use `gc bd create` directly.
+**IMPORTANT: File issues with `{{ cmd }} bd create`.** There is no `{{ cmd }} issue` or `{{ cmd }} issues` namespace here. Use `{{ cmd }} bd create` directly.
 
 **The test**: "Which repo would the fix be committed to?"
 - Fix in `anthropics/beads` -> file in beads rig
@@ -135,10 +135,10 @@ Wrong. The issue is about beads code, so it goes in the beads rig.
 ## Gotchas when Filing Beads
 
 **Temporal language inverts dependencies.** "Phase 1 blocks Phase 2" is backwards.
-- WRONG: `gc bd dep add phase1 phase2` (temporal: "1 before 2")
-- RIGHT: `gc bd dep add phase2 phase1` (requirement: "2 needs 1")
+- WRONG: `{{ cmd }} bd dep add phase1 phase2` (temporal: "1 before 2")
+- RIGHT: `{{ cmd }} bd dep add phase2 phase1` (requirement: "2 needs 1")
 
-**Rule**: Think "X needs Y", not "X comes before Y". Verify with `gc bd blocked`.
+**Rule**: Think "X needs Y", not "X comes before Y". Verify with `{{ cmd }} bd blocked`.
 
 ## Responsibilities
 
@@ -222,13 +222,13 @@ gh pr create --repo $(git remote get-url origin | sed 's/.*github.com[:/]\(.*\)\
 
 | Want to... | Correct command | Common mistake |
 |------------|----------------|----------------|
-| Dispatch work to polecat | `gc sling <rig>/{{ .BindingPrefix }}polecat <bead>` | ~~gc bd update --label=pool:...~~ (labels don't trigger scale_check); plain `<rig>/polecat` won't match binding-prefixed polecats imported via PackV2 |
+| Dispatch work to polecat | `{{ cmd }} sling <rig>/{{ .BindingPrefix }}polecat <bead>` | ~~gc bd update --label=pool:...~~ (labels don't trigger scale_check); plain `<rig>/polecat` won't match binding-prefixed polecats imported via PackV2 |
 | Drain stuck polecat | `{{ cmd }} runtime drain <name>` | ~~gc polecat kill~~ (not a command) |
 | Pause rig (daemon won't restart) | `{{ cmd }} rig suspend <rig>` | ~~gc rig stop~~ (daemon will restart it) |
 | Re-enable suspended rig | `{{ cmd }} rig resume <rig>` | |
 | Create convoy for batch work | `{{ cmd }} convoy create "name" <issues>` | |
 | View convoy progress | `{{ cmd }} convoy status <id>` | |
-| Create issues | `gc bd create "title"` | ~~gc issue create~~ (not a command) |
+| Create issues | `{{ cmd }} bd create "title"` | ~~gc issue create~~ (not a command) |
 
 **Rig lifecycle commands:**
 - `suspend/resume` — Dormant toggle. Daemon skips suspended rigs entirely.
