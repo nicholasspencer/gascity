@@ -396,7 +396,7 @@ func cmdInitWithOptionsInternal(args []string, providerFlag, bootstrapProfileFla
 	return finalizeInit(cityPath, stdout, stderr, initFinalizeOptions{
 		skipProviderReadiness: skipProviderReadiness,
 		showProgress:          true,
-		commandName:           "gc init",
+		commandName:           cmdName("init"),
 	})
 }
 
@@ -903,7 +903,7 @@ func cmdInitFromTOMLFileWithOptions(fs fsys.FS, tomlSrc, cityPath, nameOverride 
 	fmt.Fprintf(stdout, "Initialized city %q from %s.\n", cityName, filepath.Base(tomlSrc)) //nolint:errcheck // best-effort stdout
 	return finalizeInit(cityPath, stdout, stderr, initFinalizeOptions{
 		skipProviderReadiness: skipProviderReadiness,
-		commandName:           "gc init",
+		commandName:           cmdName("init"),
 	})
 }
 
@@ -1384,7 +1384,7 @@ func doInitFromDirWithOptionsFS(fs fsys.FS, srcDir, cityPath, nameOverride strin
 	fmt.Fprintf(stdout, "Initialized city %q from %s.\n", cityName, filepath.Base(srcDir)) //nolint:errcheck // best-effort stdout
 	return finalizeInit(cityPath, stdout, stderr, initFinalizeOptions{
 		skipProviderReadiness: skipProviderReadiness,
-		commandName:           "gc init",
+		commandName:           cmdName("init"),
 	})
 }
 
