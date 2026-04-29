@@ -121,7 +121,7 @@ drain handles them on the next tick.`,
 func cmdReload(args []string, async bool, soft bool, jsonOut bool, timeoutValue string, timeoutChanged bool, stdout, stderr io.Writer) int {
 	cityPath, err := resolveCommandCity(args)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc reload: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "reload", err)
 		return 1
 	}
 
@@ -152,7 +152,7 @@ func cmdReload(args []string, async bool, soft bool, jsonOut bool, timeoutValue 
 				return 1
 			}
 		}
-		fmt.Fprintf(stderr, "gc reload: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "reload", err)
 		return 1
 	}
 

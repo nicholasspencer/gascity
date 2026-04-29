@@ -40,7 +40,7 @@ func newRigStatusCmd(stdout, stderr io.Writer) *cobra.Command {
 func cmdRigStatus(args []string, jsonOutput bool, stdout, stderr io.Writer) int {
 	ctx, err := resolveContext()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc rig status: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "rig status", err)
 		return 1
 	}
 	rigName := ctx.RigName
@@ -54,7 +54,7 @@ func cmdRigStatus(args []string, jsonOutput bool, stdout, stderr io.Writer) int 
 	cityPath := ctx.CityPath
 	cfg, err := loadCityConfig(cityPath, stderr)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc rig status: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "rig status", err)
 		return 1
 	}
 

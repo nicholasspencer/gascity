@@ -61,7 +61,7 @@ func doRegisterWithOptionsJSON(args []string, nameOverride string, jsonOut bool,
 		cityPath, err = resolveCommandCity(nil)
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "gc register: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "register", err)
 		return 1
 	}
 
@@ -72,7 +72,7 @@ func doRegisterWithOptionsJSON(args []string, nameOverride string, jsonOut bool,
 	}
 	registerName, err := resolveRegistrationName(cityPath, nameOverride)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc register: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "register", err)
 		return 1
 	}
 	registerStdout := stdout
@@ -149,7 +149,7 @@ func doUnregisterJSON(args []string, jsonOut bool, stdout, stderr io.Writer) int
 		cityPath, err = resolveCommandCity(nil)
 	}
 	if err != nil {
-		fmt.Fprintf(stderr, "gc unregister: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "unregister", err)
 		return 1
 	}
 	entry, registered, _ := registeredCityEntry(cityPath)
@@ -230,7 +230,7 @@ func doCities(jsonOutput bool, stdout, stderr io.Writer) int {
 	reg := supervisor.NewRegistry(registryPath)
 	entries, err := reg.List()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc cities: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "cities", err)
 		return 1
 	}
 

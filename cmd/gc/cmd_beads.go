@@ -340,12 +340,12 @@ type beadsHealthJSONResult struct {
 func doBeadsHealth(quiet, jsonOut bool, stdout, stderr io.Writer) int {
 	cityPath, err := resolveCity()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc beads health: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "beads health", err)
 		return 1
 	}
 
 	if err := healthBeadsProvider(cityPath); err != nil {
-		fmt.Fprintf(stderr, "gc beads health: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "beads health", err)
 		return 1
 	}
 	if jsonOut {

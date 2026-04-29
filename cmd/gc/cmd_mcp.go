@@ -60,12 +60,12 @@ func newMcpListCmd(stdout, stderr io.Writer) *cobra.Command {
 
 			cityPath, err := resolveCity()
 			if err != nil {
-				fmt.Fprintf(stderr, "gc mcp list: %v\n", err) //nolint:errcheck // best-effort stderr
+				cmdErr(stderr, "mcp list", err)
 				return errExit
 			}
 			cfg, err := loadCityConfig(cityPath, stderr)
 			if err != nil {
-				fmt.Fprintf(stderr, "gc mcp list: %v\n", err) //nolint:errcheck // best-effort stderr
+				cmdErr(stderr, "mcp list", err)
 				return errExit
 			}
 
@@ -76,7 +76,7 @@ func newMcpListCmd(stdout, stderr io.Writer) *cobra.Command {
 			if sessionID != "" {
 				store, err = openCityStoreAt(cityPath)
 				if err != nil {
-					fmt.Fprintf(stderr, "gc mcp list: %v\n", err) //nolint:errcheck // best-effort stderr
+					cmdErr(stderr, "mcp list", err)
 					return errExit
 				}
 				view, err = resolveSessionMCPProjection(cityPath, cfg, store, sessionID, exec.LookPath)
@@ -95,7 +95,7 @@ func newMcpListCmd(stdout, stderr io.Writer) *cobra.Command {
 				view, err = resolveDeterministicAgentMCPProjection(cityPath, cfg, cfgAgent, exec.LookPath)
 			}
 			if err != nil {
-				fmt.Fprintf(stderr, "gc mcp list: %v\n", err) //nolint:errcheck // best-effort stderr
+				cmdErr(stderr, "mcp list", err)
 				return errExit
 			}
 

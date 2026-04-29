@@ -99,7 +99,7 @@ func newBeadsCityUseExternalCmd(stdout, stderr io.Writer) *cobra.Command {
 func cmdBeadsCityUseManaged(opts cityEndpointOptions, stdout, stderr io.Writer) int {
 	cityPath, err := resolveCity()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc beads city use-managed: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "beads city use-managed", err)
 		return 1
 	}
 	return doBeadsCityEndpoint(fsys.OSFS{}, cityPath, opts, stdout, stderr)
@@ -108,7 +108,7 @@ func cmdBeadsCityUseManaged(opts cityEndpointOptions, stdout, stderr io.Writer) 
 func cmdBeadsCityUseExternal(opts cityEndpointOptions, stdout, stderr io.Writer) int {
 	cityPath, err := resolveCity()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc beads city use-external: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "beads city use-external", err)
 		return 1
 	}
 	return doBeadsCityEndpoint(fsys.OSFS{}, cityPath, opts, stdout, stderr)

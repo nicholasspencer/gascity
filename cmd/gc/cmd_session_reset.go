@@ -52,7 +52,7 @@ func cmdSessionReset(args []string, stdout, stderr io.Writer, jsonOutput ...bool
 
 	cityPath, err := resolveCity()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc session reset: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "session reset", err)
 		return 1
 	}
 	if !cityUsesManagedReconciler(cityPath) {
@@ -60,7 +60,7 @@ func cmdSessionReset(args []string, stdout, stderr io.Writer, jsonOutput ...bool
 		return 1
 	}
 	if err := pokeController(cityPath); err != nil {
-		fmt.Fprintf(stderr, "gc session reset: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "session reset", err)
 		return 1
 	}
 
@@ -68,13 +68,13 @@ func cmdSessionReset(args []string, stdout, stderr io.Writer, jsonOutput ...bool
 
 	sessionID, err := resolveSessionIDWithConfig(cityPath, cfg, store, args[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "gc session reset: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "session reset", err)
 		return 1
 	}
 
 	handle, err := workerHandleForSessionWithConfig(cityPath, store, newSessionProvider(), cfg, sessionID)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc session reset: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "session reset", err)
 		return 1
 	}
 
@@ -92,7 +92,7 @@ func cmdSessionReset(args []string, stdout, stderr io.Writer, jsonOutput ...bool
 	}
 
 	if err := handle.Reset(context.Background()); err != nil {
-		fmt.Fprintf(stderr, "gc session reset: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "session reset", err)
 		return 1
 	}
 

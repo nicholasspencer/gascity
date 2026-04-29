@@ -2374,7 +2374,7 @@ func stopTargetsForNames(names []string, cfg *config.City, store beads.Store, st
 				}
 			}
 		} else if stderr != nil {
-			fmt.Fprintf(stderr, "gc lifecycle: session bead lookup degraded to legacy session-name resolution: %v\n", err) //nolint:errcheck
+			cmdErr(stderr, "lifecycle: session bead lookup degraded to legacy session-name resolution", err)
 		}
 	}
 	targets := make([]stopTarget, 0, len(names))

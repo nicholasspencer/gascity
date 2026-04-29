@@ -55,13 +55,13 @@ func cmdSessionWake(args []string, stdout, stderr io.Writer, jsonOutput ...bool)
 	}
 	id, err := resolveSessionIDMaterializingNamed(cityPath, cfg, store, args[0])
 	if err != nil {
-		fmt.Fprintf(stderr, "gc session wake: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "session wake", err)
 		return 1
 	}
 
 	b, err := store.Get(id)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc session wake: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "session wake", err)
 		return 1
 	}
 	if !session.IsSessionBeadOrRepairable(b) {
@@ -76,7 +76,7 @@ func cmdSessionWake(args []string, stdout, stderr io.Writer, jsonOutput ...bool)
 			fmt.Fprintf(stderr, "gc session wake: session %s is %s\n", id, state) //nolint:errcheck
 			return 1
 		}
-		fmt.Fprintf(stderr, "gc session wake: updating metadata: %v\n", err) //nolint:errcheck
+		cmdErr(stderr, "session wake: updating metadata", err)
 		return 1
 	}
 	if !hasRunnableTemplate && sessionWakeRequestedCreate(b) {
@@ -94,11 +94,11 @@ func cmdSessionWake(args []string, stdout, stderr io.Writer, jsonOutput ...bool)
 	}
 	if cityErr == nil {
 		if err := withdrawQueuedWaitNudges(cityPath, nudgeIDs); err != nil {
-			fmt.Fprintf(stderr, "gc session wake: warning: withdrawing queued wait nudges: %v\n", err) //nolint:errcheck
+			cmdErr(stderr, "session wake: warning: withdrawing queued wait nudges", err)
 		}
 		if cityUsesManagedReconciler(cityPath) {
 			if err := pokeController(cityPath); err != nil {
-				fmt.Fprintf(stderr, "gc session wake: warning: poke failed: %v\n", err) //nolint:errcheck
+				cmdErr(stderr, "session wake: warning: poke failed", err)
 			}
 		}
 	}

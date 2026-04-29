@@ -93,7 +93,7 @@ func cmdGraph(args []string, opts graphOpts, stdout, stderr io.Writer) int {
 func openRigAwareStore(args []string, stderr io.Writer) (beads.Store, int) {
 	cityPath, err := resolveCity()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc graph: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "graph", err)
 		return nil, 1
 	}
 
@@ -104,7 +104,7 @@ func openRigAwareStore(args []string, stderr io.Writer) (beads.Store, int) {
 			if storeDir := slingDirForBead(cfg, cityPath, args[0]); storeDir != cityPath {
 				store, err := openStoreAtForCity(storeDir, cityPath)
 				if err != nil {
-					fmt.Fprintf(stderr, "gc graph: %v\n", err)                      //nolint:errcheck // best-effort stderr
+					cmdErr(stderr, "graph", err)
 					fmt.Fprintln(stderr, "hint: run \"gc doctor\" for diagnostics") //nolint:errcheck // best-effort stderr
 					return nil, 1
 				}
@@ -115,7 +115,7 @@ func openRigAwareStore(args []string, stderr io.Writer) (beads.Store, int) {
 
 	store, err := openStoreAtForCity(cityPath, cityPath)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc graph: %v\n", err)                      //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "graph", err)
 		fmt.Fprintln(stderr, "hint: run \"gc doctor\" for diagnostics") //nolint:errcheck // best-effort stderr
 		return nil, 1
 	}
@@ -151,7 +151,7 @@ func doGraph(store beads.Store, args []string, opts graphOpts, stdout, stderr io
 	// Resolve input — expand containers, returning beads directly.
 	resolved, err := resolveGraphInput(store, args, stderr)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc graph: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "graph", err)
 		return 1
 	}
 	if len(resolved) == 0 {

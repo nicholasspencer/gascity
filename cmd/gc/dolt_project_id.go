@@ -85,12 +85,12 @@ func newEnsureProjectIDCmd(stdout, stderr io.Writer) *cobra.Command {
 			defer closeRecorder()
 			report, err := ensureManagedDoltProjectIDWithRecorder(metadataPath, host, port, user, database, cityPath, rec)
 			if err != nil {
-				fmt.Fprintf(stderr, "gc dolt-state ensure-project-id: %v\n", err) //nolint:errcheck
+				cmdErr(stderr, "dolt-state ensure-project-id", err)
 				return errExit
 			}
 			for _, line := range managedDoltProjectIDFields(report) {
 				if _, writeErr := fmt.Fprintln(stdout, line); writeErr != nil {
-					fmt.Fprintf(stderr, "gc dolt-state ensure-project-id: %v\n", writeErr) //nolint:errcheck
+					cmdErr(stderr, "dolt-state ensure-project-id", writeErr)
 					return errExit
 				}
 			}

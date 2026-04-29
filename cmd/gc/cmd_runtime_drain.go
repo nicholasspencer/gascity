@@ -188,7 +188,7 @@ func cmdRuntimeDrain(args []string, jsonOutput bool, stdout, stderr io.Writer) i
 	}
 	target, err := resolveSessionRuntimeTarget(args[0], stderr)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc runtime drain: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime drain", err)
 		return 1
 	}
 	sp := newSessionProvider()
@@ -211,7 +211,7 @@ func doRuntimeDrain(dops drainOps, sp runtime.Provider, rec events.Recorder,
 		return 1
 	}
 	if err := dops.setDrain(sn); err != nil {
-		fmt.Fprintf(stderr, "gc runtime drain: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime drain", err)
 		return 1
 	}
 	rec.Record(events.Event{
@@ -270,7 +270,7 @@ func cmdRuntimeUndrain(args []string, jsonOutput bool, stdout, stderr io.Writer)
 	}
 	target, err := resolveSessionRuntimeTarget(args[0], stderr)
 	if err != nil {
-		fmt.Fprintf(stderr, "gc runtime undrain: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime undrain", err)
 		return 1
 	}
 	sp := newSessionProvider()
@@ -293,7 +293,7 @@ func doRuntimeUndrain(dops drainOps, sp runtime.Provider, rec events.Recorder,
 		return 1
 	}
 	if err := dops.clearDrain(sn); err != nil {
-		fmt.Fprintf(stderr, "gc runtime undrain: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime undrain", err)
 		return 1
 	}
 	rec.Record(events.Event{
@@ -350,7 +350,7 @@ func cmdRuntimeDrainCheck(args []string, jsonOutput bool, stdout, stderr io.Writ
 	if len(args) > 0 {
 		target, err := resolveSessionRuntimeTarget(args[0], stderr)
 		if err != nil {
-			fmt.Fprintf(stderr, "gc runtime drain-check: %v\n", err) //nolint:errcheck // best-effort stderr
+			cmdErr(stderr, "runtime drain-check", err)
 			return 1                                                 // silent — same as current "not draining" behavior
 		}
 		sp := newSessionProvider()
@@ -436,7 +436,7 @@ func cmdRuntimeDrainAck(args []string, jsonOutput bool, stdout, stderr io.Writer
 	if len(args) > 0 {
 		target, err := resolveSessionRuntimeTarget(args[0], stderr)
 		if err != nil {
-			fmt.Fprintf(stderr, "gc runtime drain-ack: %v\n", err) //nolint:errcheck // best-effort stderr
+			cmdErr(stderr, "runtime drain-ack", err)
 			return 1
 		}
 		sp := newSessionProvider()
@@ -446,7 +446,7 @@ func cmdRuntimeDrainAck(args []string, jsonOutput bool, stdout, stderr io.Writer
 
 	current, err := currentSessionRuntimeTarget()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc runtime drain-ack: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime drain-ack", err)
 		return 1
 	}
 	sp := newSessionProvider()
@@ -496,7 +496,7 @@ It emits a session.draining event before waiting.`,
 func cmdRuntimeRequestRestart(stdout, stderr io.Writer) int {
 	current, err := currentSessionRuntimeTarget()
 	if err != nil {
-		fmt.Fprintf(stderr, "gc runtime request-restart: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime request-restart", err)
 		return 1
 	}
 
@@ -504,17 +504,17 @@ func cmdRuntimeRequestRestart(stdout, stderr io.Writer) int {
 	dops := newDrainOps(sp)
 	store, storeErr := openCityStoreAt(current.cityPath)
 	if storeErr != nil {
-		fmt.Fprintf(stderr, "gc runtime request-restart: opening store: %v\n", storeErr) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime request-restart: opening store", storeErr)
 	}
 	if store != nil {
 		restartable, err := sessionRestartableByController(store, current.sessionName)
 		if err != nil {
-			fmt.Fprintf(stderr, "gc runtime request-restart: checking session type: %v\n", err) //nolint:errcheck // best-effort stderr
+			cmdErr(stderr, "runtime request-restart: checking session type", err)
 			return 1
 		}
 		if !restartable {
 			if err := clearRestartRequest(store, dops, current.sessionName); err != nil {
-				fmt.Fprintf(stderr, "gc runtime request-restart: clearing stale restart request: %v\n", err) //nolint:errcheck // best-effort stderr
+				cmdErr(stderr, "runtime request-restart: clearing stale restart request", err)
 				return 1
 			}
 			fmt.Fprintln(stdout, "Restart skipped for named session; controller cannot restart on-demand named sessions.") //nolint:errcheck // best-effort stdout
@@ -567,14 +567,14 @@ func doRuntimeRequestRestart(ctx context.Context, dops drainOps, persistRestart 
 	targetName, sn string, pollInterval, timeout time.Duration, stdout, stderr io.Writer,
 ) int {
 	if err := dops.setRestartRequested(sn); err != nil {
-		fmt.Fprintf(stderr, "gc runtime request-restart: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime request-restart", err)
 		return 1
 	}
 	// Also persist the request through the worker boundary so it survives
 	// tmux session death. Non-fatal: the runtime flag above is primary.
 	if persistRestart != nil {
 		if err := persistRestart(); err != nil {
-			fmt.Fprintf(stderr, "gc runtime request-restart: setting bead restart flag: %v\n", err) //nolint:errcheck // best-effort stderr
+			cmdErr(stderr, "runtime request-restart: setting bead restart flag", err)
 		}
 	}
 	rec.Record(events.Event{
@@ -627,7 +627,7 @@ func waitForControllerRestart(ctx context.Context, dops drainOps, sn, command st
 // will stop the session on the next tick.
 func doRuntimeDrainAck(dops drainOps, targetName, sn string, jsonOutput bool, stdout, stderr io.Writer) int {
 	if err := dops.setDrainAck(sn); err != nil {
-		fmt.Fprintf(stderr, "gc runtime drain-ack: %v\n", err) //nolint:errcheck // best-effort stderr
+		cmdErr(stderr, "runtime drain-ack", err)
 		return 1
 	}
 	if jsonOutput {
