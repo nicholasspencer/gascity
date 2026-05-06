@@ -446,6 +446,18 @@
               "null"
             ]
           },
+          "WatchdogStaleThreshold": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "WatchdogTargetTemplate": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
           "WorkDir": {
             "type": [
               "string",
@@ -469,6 +481,8 @@
           "StartCommand",
           "Nudge",
           "IdleTimeout",
+          "WatchdogTargetTemplate",
+          "WatchdogStaleThreshold",
           "SleepAfterIdle",
           "InstallAgentHooks",
           "Skills",

@@ -314,6 +314,8 @@ type AgentPatch struct {
 	StartCommand            *string           `json:"StartCommand"`
 	Suspended               *bool             `json:"Suspended"`
 	WakeMode                *string           `json:"WakeMode"`
+	WatchdogStaleThreshold  *string           `json:"WatchdogStaleThreshold"`
+	WatchdogTargetTemplate  *string           `json:"WatchdogTargetTemplate"`
 	WorkDir                 *string           `json:"WorkDir"`
 }
 

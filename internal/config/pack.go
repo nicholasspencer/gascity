@@ -2355,6 +2355,12 @@ func applyAgentOverride(a *Agent, ov *AgentOverride) {
 	if ov.IdleTimeout != nil {
 		a.IdleTimeout = *ov.IdleTimeout
 	}
+	if ov.WatchdogTargetTemplate != nil {
+		a.WatchdogTargetTemplate = *ov.WatchdogTargetTemplate
+	}
+	if ov.WatchdogStaleThreshold != nil {
+		a.WatchdogStaleThreshold = *ov.WatchdogStaleThreshold
+	}
 	if ov.SleepAfterIdle != nil {
 		a.SleepAfterIdle = NormalizeSleepAfterIdle(*ov.SleepAfterIdle)
 		a.SleepAfterIdleSource = "rig_override"

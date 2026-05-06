@@ -200,6 +200,14 @@
           "type": "string",
           "description": "IdleTimeout is the maximum time an agent session can be inactive before\nthe controller kills and restarts it. Duration string (e.g., \"15m\", \"1h\").\nEmpty (default) disables idle checking."
         },
+        "watchdog_target_template": {
+          "type": "string",
+          "description": "WatchdogTargetTemplate names another agent template that this agent\nsupervises (e.g., \"gastown.deacon\"). When set together with\nWatchdogStaleThreshold, the controller defers waking THIS agent as\nlong as the target is making progress, measured by the most-recent\nts across .gc/events.jsonl entries whose actor field matches the\ntarget template name. Every bead.created / bead.updated /\nbead.closed event tags the actor that performed it, so the signal\nadvances on every bead touch by the target (not just on new wisp\ncreation). The watchdog only fires when the target may be stuck.\nEmpty disables the gate."
+        },
+        "watchdog_stale_threshold": {
+          "type": "string",
+          "description": "WatchdogStaleThreshold is the staleness window for the watchdog target.\nDuration string (e.g., \"10m\"). Defers wake while the most-recent\nactor=target event in .gc/events.jsonl is within this window.\nShould exceed the target's max idle-between-bead-touches interval\nwith margin. Empty or zero disables."
+        },
         "sleep_after_idle": {
           "type": "string",
           "description": "SleepAfterIdle overrides idle sleep policy for this agent. Accepts a\nduration string (e.g., \"30s\") or \"off\"."
@@ -436,6 +444,14 @@
         "idle_timeout": {
           "type": "string",
           "description": "IdleTimeout overrides the idle timeout duration string (e.g., \"30s\", \"5m\", \"1h\")."
+        },
+        "watchdog_target_template": {
+          "type": "string",
+          "description": "WatchdogTargetTemplate overrides the watchdog target template name.\nEmpty pointer leaves the agent's value untouched."
+        },
+        "watchdog_stale_threshold": {
+          "type": "string",
+          "description": "WatchdogStaleThreshold overrides the watchdog staleness threshold.\nEmpty pointer leaves the agent's value untouched."
         },
         "sleep_after_idle": {
           "type": "string",
@@ -679,6 +695,14 @@
         "idle_timeout": {
           "type": "string",
           "description": "IdleTimeout overrides the idle timeout. Duration string (e.g., \"30s\", \"5m\", \"1h\")."
+        },
+        "watchdog_target_template": {
+          "type": "string",
+          "description": "WatchdogTargetTemplate overrides the watchdog target template name."
+        },
+        "watchdog_stale_threshold": {
+          "type": "string",
+          "description": "WatchdogStaleThreshold overrides the watchdog staleness threshold."
         },
         "sleep_after_idle": {
           "type": "string",
