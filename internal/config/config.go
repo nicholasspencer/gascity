@@ -496,6 +496,12 @@ type AgentOverride struct {
 	// MinWakeInterval overrides the per-agent minimum wake interval. Duration
 	// string (e.g., "5m"). Empty pointer leaves the agent's value untouched.
 	MinWakeInterval *string `toml:"min_wake_interval,omitempty"`
+	// WatchdogTargetTemplate overrides the watchdog target template name.
+	// Empty pointer leaves the agent's value untouched.
+	WatchdogTargetTemplate *string `toml:"watchdog_target_template,omitempty"`
+	// WatchdogStaleThreshold overrides the watchdog staleness threshold.
+	// Empty pointer leaves the agent's value untouched.
+	WatchdogStaleThreshold *string `toml:"watchdog_stale_threshold,omitempty"`
 	// SleepAfterIdle overrides idle sleep policy for this agent. Accepts a
 	// duration string (e.g., "30s") or "off".
 	SleepAfterIdle *string `toml:"sleep_after_idle,omitempty"`
@@ -1715,6 +1721,23 @@ type Agent struct {
 	// the "deferred_by_min_wake_interval" outcome and retry on the next
 	// reconciler tick.
 	MinWakeInterval string `toml:"min_wake_interval,omitempty"`
+	// WatchdogTargetTemplate names another agent template that this agent
+	// supervises (e.g., "gastown.deacon"). When set together with
+	// WatchdogStaleThreshold, the controller defers waking THIS agent as
+	// long as the target is making progress, measured by the most-recent
+	// ts across .gc/events.jsonl entries whose actor field matches the
+	// target template name. Every bead.created / bead.updated /
+	// bead.closed event tags the actor that performed it, so the signal
+	// advances on every bead touch by the target (not just on new wisp
+	// creation). The watchdog only fires when the target may be stuck.
+	// Empty disables the gate.
+	WatchdogTargetTemplate string `toml:"watchdog_target_template,omitempty"`
+	// WatchdogStaleThreshold is the staleness window for the watchdog target.
+	// Duration string (e.g., "10m"). Defers wake while the most-recent
+	// actor=target event in .gc/events.jsonl is within this window.
+	// Should exceed the target's max idle-between-bead-touches interval
+	// with margin. Empty or zero disables.
+	WatchdogStaleThreshold string `toml:"watchdog_stale_threshold,omitempty"`
 	// SleepAfterIdle overrides idle sleep policy for this agent. Accepts a
 	// duration string (e.g., "30s") or "off".
 	SleepAfterIdle string `toml:"sleep_after_idle,omitempty"`
@@ -1873,6 +1896,19 @@ func (a *Agent) MinWakeIntervalDuration() time.Duration {
 		return 0
 	}
 	d, err := time.ParseDuration(a.MinWakeInterval)
+	if err != nil {
+		return 0
+	}
+	return d
+}
+
+// WatchdogStaleThresholdDuration returns the watchdog staleness threshold as
+// a time.Duration. Returns 0 if empty or unparseable (gate disabled).
+func (a *Agent) WatchdogStaleThresholdDuration() time.Duration {
+	if a.WatchdogStaleThreshold == "" {
+		return 0
+	}
+	d, err := time.ParseDuration(a.WatchdogStaleThreshold)
 	if err != nil {
 		return 0
 	}
