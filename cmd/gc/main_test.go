@@ -17,6 +17,7 @@ import (
 	"github.com/BurntSushi/toml"
 	"github.com/gastownhall/gascity/internal/api"
 	"github.com/gastownhall/gascity/internal/beads"
+	"github.com/gastownhall/gascity/internal/builtinpacks"
 	"github.com/gastownhall/gascity/internal/citylayout"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/events"
@@ -243,14 +244,19 @@ func newTestscriptParams(t *testing.T, files ...string) testscript.Params {
 		Dir:         "testdata",
 		WorkdirRoot: shortSocketTempDir(t, "gc-testscript-"),
 		Setup: func(env *testscript.Env) error {
+			home := filepath.Join(env.WorkDir, "home")
 			gcHome := filepath.Join(env.WorkDir, ".gc-home")
 			runtimeDir := filepath.Join(env.WorkDir, ".runtime")
+			if err := os.MkdirAll(home, 0o755); err != nil {
+				return err
+			}
 			if err := os.MkdirAll(gcHome, 0o755); err != nil {
 				return err
 			}
 			if err := os.MkdirAll(runtimeDir, 0o755); err != nil {
 				return err
 			}
+			env.Setenv("HOME", home)
 			env.Setenv("GC_HOME", gcHome)
 			env.Setenv("XDG_RUNTIME_DIR", runtimeDir)
 			return nil
@@ -2615,6 +2621,19 @@ func mapKeys(m map[string]TemplateParams) []string {
 
 // --- gc init (doInit with fsys.Fake) ---
 
+func loadFakeInitPackConfig(t *testing.T, f *fsys.Fake, cityPath string) initPackConfig {
+	t.Helper()
+	data, ok := f.Files[filepath.Join(cityPath, "pack.toml")]
+	if !ok {
+		t.Fatalf("%s/pack.toml not written", cityPath)
+	}
+	var cfg initPackConfig
+	if _, err := toml.Decode(string(data), &cfg); err != nil {
+		t.Fatalf("parsing %s/pack.toml: %v", cityPath, err)
+	}
+	return cfg
+}
+
 func TestDoInitSuccess(t *testing.T) {
 	f := fsys.NewFake()
 	// No pre-existing files — doInit creates everything from scratch.
@@ -2685,26 +2704,23 @@ func TestDoInitSuccess(t *testing.T) {
 		t.Errorf("fresh init should not emit inline [[agent]] entries into pack.toml:\n%s", packToml)
 	}
 
-	// Verify the composed config loads correctly from pack.toml + city.toml.
-	// The mayor comes from the scaffolded agents/<name>/ tree, while the
-	// named session still lives in pack.toml. workspace name lives in
-	// .gc/site.toml as the machine-local binding.
-	cfg, err := loadCityConfigFS(f, filepath.Join("/bright-lights", "city.toml"))
+	// Verify the pack-first scaffold directly. Remote bundled imports are
+	// installed through the OS-backed pack registry, so fake-FS init tests
+	// assert the written pack and site-binding artifacts without expanding
+	// those imports.
+	site, err := config.LoadSiteBinding(f, "/bright-lights")
 	if err != nil {
-		t.Fatalf("loading written config: %v", err)
+		t.Fatalf("loading site binding: %v", err)
 	}
-	if cfg.ResolvedWorkspaceName != "bright-lights" {
-		t.Errorf("ResolvedWorkspaceName = %q, want %q", cfg.ResolvedWorkspaceName, "bright-lights")
+	if site.WorkspaceName != "bright-lights" {
+		t.Errorf("site.WorkspaceName = %q, want %q", site.WorkspaceName, "bright-lights")
 	}
-	explicit := explicitAgents(cfg.Agents)
-	if len(explicit) != 1 {
-		t.Fatalf("len(explicitAgents) = %d, want 1", len(explicit))
+	packCfg := loadFakeInitPackConfig(t, f, "/bright-lights")
+	if len(packCfg.Agents) != 0 {
+		t.Fatalf("len(packCfg.Agents) = %d, want 0 for convention-scaffolded init", len(packCfg.Agents))
 	}
-	if explicit[0].Name != "mayor" {
-		t.Errorf("explicitAgents[0].Name = %q, want %q", explicit[0].Name, "mayor")
-	}
-	if !strings.HasSuffix(explicit[0].PromptTemplate, filepath.Join("agents", "mayor", "prompt.template.md")) {
-		t.Errorf("explicitAgents[0].PromptTemplate = %q, want suffix %q", explicit[0].PromptTemplate, filepath.Join("agents", "mayor", "prompt.template.md"))
+	if len(packCfg.NamedSessions) != 1 || packCfg.NamedSessions[0].Template != "mayor" {
+		t.Fatalf("NamedSessions = %v, want mayor named session", packCfg.NamedSessions)
 	}
 	if _, ok := f.Files[filepath.Join("/bright-lights", "formulas", "mol-scoped-work.toml")]; ok {
 		t.Fatal("doInit should not seed builtin formulas into city-local formulas/")
@@ -2736,6 +2752,14 @@ func TestDoInitWritesExpectedTOML(t *testing.T) {
 name = "bright-lights"
 schema = 2
 
+[imports]
+[imports.bd]
+source = "https://github.com/gastownhall/gascity.git//examples/bd"
+[imports.core]
+source = "https://github.com/gastownhall/gascity.git//internal/bootstrap/packs/core"
+[imports.maintenance]
+source = "https://github.com/gastownhall/gascity.git//examples/gastown/packs/maintenance"
+
 [[named_session]]
 template = "mayor"
 mode = "always"
@@ -2763,14 +2787,8 @@ func TestDoInitGastownWritesCanonicalPackV2Shape(t *testing.T) {
 	}
 
 	packToml := string(f.Files[filepath.Join("/bright-lights", "pack.toml")])
-	if !strings.Contains(packToml, "[imports.gastown]") || !strings.Contains(packToml, `source = "`+config.PublicGastownPackSource+`"`) {
+	if !strings.Contains(packToml, "[imports.gastown]") || !strings.Contains(packToml, `source = "`+builtinpacks.MustSource("gastown")+`"`) {
 		t.Fatalf("pack.toml missing gastown import:\n%s", packToml)
-	}
-	if !strings.Contains(packToml, `version = "`+config.PublicGastownPackVersion+`"`) {
-		t.Fatalf("pack.toml missing gastown version pin:\n%s", packToml)
-	}
-	if strings.Contains(packToml, ".gc/system/packs/gastown") {
-		t.Fatalf("pack.toml should not import legacy materialized gastown:\n%s", packToml)
 	}
 	if strings.Contains(packToml, `append_fragments = ["command-glossary", "operational-awareness"]`) {
 		t.Fatalf("pack.toml should not rewrite workspace.global_fragments into append_fragments:\n%s", packToml)
@@ -3272,8 +3290,7 @@ func TestDoInitWithWizardConfig(t *testing.T) {
 	}
 
 	// Verify written raw city.toml keeps the provider (runtime-local) and
-	// the composed config (city.toml + pack.toml) still surfaces the mayor
-	// agent from the scaffolded agents/<name>/ tree.
+	// init still writes the convention-discoverable mayor prompt scaffold.
 	data := f.Files[filepath.Join("/bright-lights", "city.toml")]
 	raw, err := config.Parse(data)
 	if err != nil {
@@ -3282,19 +3299,8 @@ func TestDoInitWithWizardConfig(t *testing.T) {
 	if raw.Workspace.Provider != "claude" {
 		t.Errorf("Workspace.Provider = %q, want %q", raw.Workspace.Provider, "claude")
 	}
-	cfg, err := loadCityConfigFS(f, filepath.Join("/bright-lights", "city.toml"))
-	if err != nil {
-		t.Fatalf("loading written config: %v", err)
-	}
-	explicit := explicitAgents(cfg.Agents)
-	if len(explicit) != 1 {
-		t.Fatalf("len(explicitAgents) = %d, want 1", len(explicit))
-	}
-	if explicit[0].Name != "mayor" {
-		t.Errorf("explicitAgents[0].Name = %q, want %q", explicit[0].Name, "mayor")
-	}
-	if !strings.HasSuffix(explicit[0].PromptTemplate, filepath.Join("agents", "mayor", "prompt.template.md")) {
-		t.Errorf("explicitAgents[0].PromptTemplate = %q, want suffix %q", explicit[0].PromptTemplate, filepath.Join("agents", "mayor", "prompt.template.md"))
+	if _, ok := f.Files[filepath.Join("/bright-lights", "agents", "mayor", "prompt.template.md")]; !ok {
+		t.Fatal("agents/mayor/prompt.template.md not written")
 	}
 	// Verify provider appears in TOML.
 	if !strings.Contains(string(data), `provider = "claude"`) {
@@ -3316,9 +3322,8 @@ func TestDoInitWithCustomCommand(t *testing.T) {
 		t.Fatalf("doInit = %d, want 0; stderr: %s", code, stderr.String())
 	}
 
-	// Verify raw city.toml carries start_command and no provider; the
-	// composed config then surfaces the mayor agent from convention
-	// discovery.
+	// Verify raw city.toml carries start_command and no provider; init still
+	// writes the convention-discoverable mayor prompt scaffold.
 	data := f.Files[filepath.Join("/bright-lights", "city.toml")]
 	raw, err := config.Parse(data)
 	if err != nil {
@@ -3330,12 +3335,8 @@ func TestDoInitWithCustomCommand(t *testing.T) {
 	if raw.Workspace.Provider != "" {
 		t.Errorf("Workspace.Provider = %q, want empty", raw.Workspace.Provider)
 	}
-	cfg, err := loadCityConfigFS(f, filepath.Join("/bright-lights", "city.toml"))
-	if err != nil {
-		t.Fatalf("loading written config: %v", err)
-	}
-	if len(explicitAgents(cfg.Agents)) != 1 {
-		t.Fatalf("len(explicitAgents) = %d, want 1", len(explicitAgents(cfg.Agents)))
+	if _, ok := f.Files[filepath.Join("/bright-lights", "agents", "mayor", "prompt.template.md")]; !ok {
+		t.Fatal("agents/mayor/prompt.template.md not written")
 	}
 }
 
@@ -3412,16 +3413,8 @@ func TestDoInitWithCustomTemplate(t *testing.T) {
 	if raw.Workspace.Provider != "" {
 		t.Errorf("Workspace.Provider = %q, want empty", raw.Workspace.Provider)
 	}
-	cfg, err := loadCityConfigFS(f, filepath.Join("/my-city", "city.toml"))
-	if err != nil {
-		t.Fatalf("loading written config: %v", err)
-	}
-	explicit := explicitAgents(cfg.Agents)
-	if len(explicit) != 1 {
-		t.Fatalf("len(explicitAgents) = %d, want 1", len(explicit))
-	}
-	if explicit[0].Name != "mayor" {
-		t.Errorf("explicitAgents[0].Name = %q, want %q", explicit[0].Name, "mayor")
+	if _, ok := f.Files[filepath.Join("/my-city", "agents", "mayor", "prompt.template.md")]; !ok {
+		t.Fatal("agents/mayor/prompt.template.md not written")
 	}
 }
 
@@ -3670,7 +3663,7 @@ scale_check = "echo 3"
 	if !strings.HasSuffix(mayor.PromptTemplate, filepath.Join("agents", "mayor", "prompt.template.md")) {
 		t.Errorf("mayor.PromptTemplate = %q, want suffix %q", mayor.PromptTemplate, filepath.Join("agents", "mayor", "prompt.template.md"))
 	}
-	if !strings.HasSuffix(dog.PromptTemplate, filepath.Join(".gc", "system", "packs", "maintenance", "agents", "dog", "prompt.template.md")) {
+	if !strings.HasSuffix(dog.PromptTemplate, filepath.Join("examples", "gastown", "packs", "maintenance", "agents", "dog", "prompt.template.md")) {
 		t.Errorf("dog.PromptTemplate = %q, want maintenance dog prompt", dog.PromptTemplate)
 	}
 

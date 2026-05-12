@@ -180,6 +180,7 @@ func buildDoctorChecks(cityPath string, cfg *config.City, cfgErr error, opts bui
 		register(c)
 	}
 	register(expandedConfigLoadCheck{})
+	register(newBuiltinPackRegistryMigrationCheck(cityPath))
 	register(&doctor.ImplicitImportCacheCheck{})
 	register(&doctor.DeprecatedAttachmentFieldsCheck{})
 
@@ -399,17 +400,10 @@ func (expandedConfigLoadCheck) Run(ctx *doctor.CheckContext) *doctor.CheckResult
 	if _, err := loadCityConfig(ctx.CityPath, io.Discard); err != nil {
 		return errorCheck("expanded-config-load",
 			fmt.Sprintf("expanded config load error: %v", err),
-			expandedConfigLoadFixHint(err),
+			"fix the reported config, include, import, or pack-layout error and rerun gc doctor",
 			nil)
 	}
 	return okCheck("expanded-config-load", "expanded config loaded")
-}
-
-func expandedConfigLoadFixHint(err error) string {
-	if config.IsFragmentLegacyV1SurfaceError(err) {
-		return "move fragment-authored legacy surfaces by hand; `gc doctor --fix` only rewrites root city.toml/pack.toml surfaces"
-	}
-	return "fix the reported config, include, import, or pack-layout error and rerun gc doctor"
 }
 
 func registerLocalDoctorChecks(d *doctor.Doctor, cityPath string, checks []config.LocalDoctorCheck) {

@@ -73,8 +73,10 @@ provider = "file"
 	if !ok {
 		t.Fatal("materialize.VendorSink(claude) = not found")
 	}
+	// Builtin packs now enter city config through imports, but this unit only
+	// exercises the city-local skill tree.
 	wantStdout := fmt.Sprintf(
-		"materialized 8 skill(s) into %s: core.gc-agents, core.gc-city, core.gc-dashboard, core.gc-dispatch, core.gc-mail, core.gc-rigs, core.gc-work, plan\n",
+		"materialized 1 skill(s) into %s: plan\n",
 		filepath.Join(absWorkdir, sinkDir),
 	)
 	if stdout.String() != wantStdout {
