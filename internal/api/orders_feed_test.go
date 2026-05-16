@@ -135,6 +135,34 @@ func TestBuildOrderRunFeedItemsUsesAllOrdersForDisabledExecMetadata(t *testing.T
 	}
 }
 
+func TestBuildOrderRunFeedItemsUsesGCOrderTrackingLabel(t *testing.T) {
+	state := newFakeState(t)
+	state.cityBeadStore = beads.NewMemStore()
+	state.allOrders = []orders.Order{
+		{Name: "digest", Formula: "digest-flow", Trigger: "cooldown", Interval: "1h"},
+	}
+
+	tracking, err := state.cityBeadStore.Create(beads.Bead{
+		Title:  "order:digest",
+		Status: "closed",
+		Labels: []string{orderTrackingLabel, "order-run:digest", "wisp"},
+	})
+	if err != nil {
+		t.Fatalf("create tracking bead: %v", err)
+	}
+
+	got, err := buildOrderRunFeedItems(state, "city", "test-city")
+	if err != nil {
+		t.Fatalf("buildOrderRunFeedItems: %v", err)
+	}
+	if len(got.Items) != 1 {
+		t.Fatalf("items = %d, want 1", len(got.Items))
+	}
+	if got.Items[0].BeadID != tracking.ID {
+		t.Fatalf("bead_id = %q, want %q", got.Items[0].BeadID, tracking.ID)
+	}
+}
+
 func TestOrderTrackingUpdatedAtLogsLookupFailure(t *testing.T) {
 	store := labelFailListStore{
 		Store:     beads.NewMemStore(),

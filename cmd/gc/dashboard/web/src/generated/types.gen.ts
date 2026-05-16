@@ -248,6 +248,7 @@ export type AsyncAcceptedResponse = {
 
 export type Bead = {
     assignee?: string;
+    closed_at?: string;
     created_at: string;
     dependencies?: Array<Dep> | null;
     description?: string;
@@ -265,6 +266,7 @@ export type Bead = {
     ref?: string;
     status: string;
     title: string;
+    updated_at?: string;
 };
 
 export type BeadAssignInputBody = {

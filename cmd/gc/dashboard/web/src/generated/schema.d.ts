@@ -2111,6 +2111,8 @@ export interface components {
         Bead: {
             assignee?: string;
             /** Format: date-time */
+            closed_at?: string;
+            /** Format: date-time */
             created_at: string;
             dependencies?: components["schemas"]["Dep"][] | null;
             description?: string;
@@ -2129,6 +2131,8 @@ export interface components {
             ref?: string;
             status: string;
             title: string;
+            /** Format: date-time */
+            updated_at?: string;
         };
         BeadAssignInputBody: {
             /** @description Assignee name. */

@@ -149,6 +149,7 @@ func buildRecipeApplyPlan(recipe *formula.Recipe, opts Options) (*beads.GraphApp
 				}
 				node.Metadata["idempotency_key"] = opts.IdempotencyKey
 			}
+			labelWispGraphNode(&node, step)
 		} else {
 			// graph.v2 workflows and their retry/Ralph attempt sub-recipes
 			// use step beads as independently routable actionable work, not
@@ -394,6 +395,13 @@ func recipeStepToGraphNode(step formula.RecipeStep, vars map[string]string, prio
 		Labels:      slices.Clone(b.Labels),
 		Metadata:    maps.Clone(b.Metadata),
 	}, nil
+}
+
+func labelWispGraphNode(node *beads.GraphApplyNode, step formula.RecipeStep) {
+	if step.Metadata["gc.kind"] != "wisp" {
+		return
+	}
+	node.Labels = appendLabelOnce(node.Labels, WispLabel)
 }
 
 func setNodeParentRef(nodes []beads.GraphApplyNode, stepID, parentKey, parentID string) {

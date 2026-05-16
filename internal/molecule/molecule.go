@@ -53,6 +53,9 @@ type Options struct {
 }
 
 const (
+	// WispLabel marks GC-owned wisp root beads.
+	WispLabel = "gc:wisp"
+
 	// DeferredAssigneeMetadataKey stores an assignee withheld during speculative
 	// molecule creation. Activating the molecule restores the value as Assignee.
 	DeferredAssigneeMetadataKey = "gc.deferred_assignee"
@@ -524,6 +527,7 @@ func Instantiate(ctx context.Context, store beads.Store, recipe *formula.Recipe,
 				}
 				b.Metadata["idempotency_key"] = opts.IdempotencyKey
 			}
+			labelWispRoot(&b, step)
 		} else {
 			// graph.v2 workflows and their retry/Ralph attempt sub-recipes
 			// use step beads as independently routable actionable work, not
@@ -952,6 +956,22 @@ func preserveExecutableRootType(step formula.RecipeStep) bool {
 	default:
 		return false
 	}
+}
+
+func labelWispRoot(b *beads.Bead, step formula.RecipeStep) {
+	if step.Metadata["gc.kind"] != "wisp" {
+		return
+	}
+	b.Labels = appendLabelOnce(b.Labels, WispLabel)
+}
+
+func appendLabelOnce(labels []string, label string) []string {
+	for _, existing := range labels {
+		if existing == label {
+			return labels
+		}
+	}
+	return append(labels, label)
 }
 
 func validateTimeoutMetadataVars(stepID string, metadata map[string]string) error {

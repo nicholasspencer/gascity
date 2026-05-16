@@ -155,8 +155,8 @@ func TestHandleOrdersFeedCachesUntilIndexChanges(t *testing.T) {
 	if rigStore.listCalls != 1 {
 		t.Fatalf("rig List calls after cached repeat = %d, want 1", rigStore.listCalls)
 	}
-	if cityStore.listByLabelCalls != 1 {
-		t.Fatalf("city ListByLabel calls after cached repeat = %d, want 1", cityStore.listByLabelCalls)
+	if cityStore.listByLabelCalls != 2 {
+		t.Fatalf("city ListByLabel calls after cached repeat = %d, want 2", cityStore.listByLabelCalls)
 	}
 
 	state.eventProv.Record(events.Event{Type: events.BeadCreated, Actor: "human"})
@@ -168,7 +168,7 @@ func TestHandleOrdersFeedCachesUntilIndexChanges(t *testing.T) {
 	if rigStore.listCalls != 2 {
 		t.Fatalf("rig List calls after index change = %d, want 2", rigStore.listCalls)
 	}
-	if cityStore.listByLabelCalls != 2 {
-		t.Fatalf("city ListByLabel calls after index change = %d, want 2", cityStore.listByLabelCalls)
+	if cityStore.listByLabelCalls != 4 {
+		t.Fatalf("city ListByLabel calls after index change = %d, want 4", cityStore.listByLabelCalls)
 	}
 }

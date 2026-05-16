@@ -2099,6 +2099,36 @@ func TestBdStoreListCreatedBeforeForwardsFilter(t *testing.T) {
 	}
 }
 
+func TestBdStoreListClosedBeforeForwardsFilter(t *testing.T) {
+	before := time.Date(2026, 4, 20, 12, 0, 0, 0, time.UTC)
+	wantCmd := `bd list --json --label=gc:session --status=closed --all --closed-before ` +
+		before.Format(time.RFC3339Nano) + ` --include-infra --include-gates --limit 1`
+	runner := fakeRunner(map[string]struct {
+		out []byte
+		err error
+	}{
+		wantCmd: {
+			out: []byte(`[{"id":"bd-old","title":"old session","status":"closed","issue_type":"session","created_at":"2026-04-19T11:59:00Z","closed_at":"2026-04-20T11:59:00Z","labels":["gc:session"]}]`),
+		},
+	})
+	s := beads.NewBdStore("/city", runner)
+	got, err := s.List(beads.ListQuery{
+		Label:        "gc:session",
+		Status:       "closed",
+		ClosedBefore: before,
+		Limit:        1,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 1 || got[0].ID != "bd-old" {
+		t.Fatalf("List returned %+v, want bd-old", got)
+	}
+	if got[0].ClosedAt.IsZero() {
+		t.Fatalf("ClosedAt was not decoded: %+v", got[0])
+	}
+}
+
 func TestBdStoreListByLabelEmpty(t *testing.T) {
 	runner := fakeRunner(map[string]struct {
 		out []byte
@@ -2716,6 +2746,35 @@ func TestBdStoreListBothTiersAppliesCreatedBeforeBeforeMergedLimit(t *testing.T)
 	}
 	if len(got) != 1 || got[0].ID != "bd-old" {
 		t.Fatalf("got = %+v, want only older wisp after CreatedBefore then Limit", got)
+	}
+}
+
+func TestBdStoreListWispsForwardsClosedBeforeToQuery(t *testing.T) {
+	before := time.Date(2026, 5, 2, 0, 0, 0, 0, time.UTC)
+	var queryCmd string
+	runner := func(_, name string, args ...string) ([]byte, error) {
+		queryCmd = name + " " + strings.Join(args, " ")
+		return []byte(`[{"id":"bd-w","title":"old tracking","status":"closed","issue_type":"task","created_at":"2026-05-01T00:00:00Z","closed_at":"2026-05-01T01:00:00Z","ephemeral":true,"labels":["order-tracking"]}]`), nil
+	}
+	s := beads.NewBdStore("/city", runner)
+	got, err := s.List(beads.ListQuery{
+		Label:        "order-tracking",
+		Status:       "closed",
+		ClosedBefore: before,
+		Limit:        1,
+		TierMode:     beads.TierWisps,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(queryCmd, "closed<"+before.Format(time.RFC3339Nano)) {
+		t.Fatalf("query = %q, want closed-before predicate", queryCmd)
+	}
+	if !strings.Contains(queryCmd, "--limit 1") {
+		t.Fatalf("query = %q, want server-side limit after closed predicate", queryCmd)
+	}
+	if len(got) != 1 || got[0].ID != "bd-w" {
+		t.Fatalf("got = %+v, want bd-w", got)
 	}
 }
 

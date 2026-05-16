@@ -189,11 +189,7 @@ func newCityRuntime(p CityRuntimeParams) *CityRuntime {
 	it := buildIdleTracker(p.Cfg, p.CityName, p.CityPath, p.SP)
 	mat := buildMaxSessionAgeTracker(p.Cfg, p.CityName, p.SP)
 
-	var wg wispGC
-	if p.Cfg.Daemon.WispGCEnabled() {
-		wg = newWispGC(p.Cfg.Daemon.WispGCIntervalDuration(),
-			p.Cfg.Daemon.WispTTLDuration())
-	}
+	wg := newWispGCFromConfig(p.Cfg)
 
 	managedDoltHealth := p.ManagedDoltHealth
 	if managedDoltHealth == nil {
@@ -890,7 +886,7 @@ func (cr *CityRuntime) tick(
 		cr.beadReconcileTick(ctx, result, sessionBeads, trace)
 	}
 
-	// Wisp GC: purge expired closed molecules.
+	// Bead GC: purge expired closed GC-owned beads.
 	if store := cr.cityBeadStore(); cr.wg != nil && store != nil && cr.wg.shouldRun(time.Now()) {
 		purged, gcErr := cr.wg.runGC(store, time.Now())
 		if gcErr != nil {
@@ -1243,12 +1239,7 @@ func (cr *CityRuntime) reloadConfigTraced(
 	cr.it = buildIdleTracker(nextCfg, cr.cityName, cr.cityPath, nextSp)
 	cr.mat = buildMaxSessionAgeTracker(nextCfg, cr.cityName, nextSp)
 
-	if nextCfg.Daemon.WispGCEnabled() {
-		cr.wg = newWispGC(nextCfg.Daemon.WispGCIntervalDuration(),
-			nextCfg.Daemon.WispTTLDuration())
-	} else {
-		cr.wg = nil
-	}
+	cr.wg = newWispGCFromConfig(nextCfg)
 
 	// Drain the outgoing dispatcher before replacing it so in-flight
 	// dispatchOne goroutines persist their tracking-bead outcomes against

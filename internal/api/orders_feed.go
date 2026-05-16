@@ -11,7 +11,11 @@ import (
 	"github.com/gastownhall/gascity/internal/orders"
 )
 
-const maxOrdersFeedLimit = 500
+const (
+	maxOrdersFeedLimit       = 500
+	orderTrackingLabel       = "gc:order-tracking"
+	legacyOrderTrackingLabel = "order-tracking"
+)
 
 var orderFeedLogf = log.Printf
 
@@ -307,11 +311,7 @@ func buildOrderRunFeedItems(state State, requestedScopeKind, requestedScopeRef s
 		if info.store == nil {
 			continue
 		}
-		results, err := info.store.List(beads.ListQuery{
-			Label:    "order-tracking",
-			Sort:     beads.SortCreatedDesc,
-			TierMode: beads.TierBoth,
-		})
+		results, err := listOrderTrackingFeedBeads(info.store)
 		if err != nil {
 			if requestedScopeErr == nil && info.scopeKind == requestedScopeKind && info.scopeRef == requestedScopeRef {
 				requestedScopeErr = err
@@ -367,6 +367,35 @@ func buildOrderRunFeedItems(state State, requestedScopeKind, requestedScopeRef s
 		Partial:       len(partialErrors) > 0,
 		PartialErrors: partialErrors,
 	}, nil
+}
+
+func listOrderTrackingFeedBeads(store beads.Store) ([]beads.Bead, error) {
+	entries := make([]beads.Bead, 0)
+	seen := make(map[string]struct{})
+	for _, label := range []string{orderTrackingLabel, legacyOrderTrackingLabel} {
+		results, err := store.List(beads.ListQuery{
+			Label:    label,
+			Sort:     beads.SortCreatedDesc,
+			TierMode: beads.TierBoth,
+		})
+		if err != nil {
+			return nil, err
+		}
+		for _, bead := range results {
+			if bead.ID == "" {
+				continue
+			}
+			if _, ok := seen[bead.ID]; ok {
+				continue
+			}
+			seen[bead.ID] = struct{}{}
+			entries = append(entries, bead)
+		}
+	}
+	sort.SliceStable(entries, func(i, j int) bool {
+		return entries[i].CreatedAt.After(entries[j].CreatedAt)
+	})
+	return entries, nil
 }
 
 func orderTrackingUpdatedAt(store beads.Store, tracking beads.Bead, scopedName string) time.Time {

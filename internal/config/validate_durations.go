@@ -1,21 +1,17 @@
 package config
 
-import (
-	"fmt"
-	"time"
-)
+import "fmt"
 
 // ValidateDurations checks all duration string fields in the config and returns
-// warnings for any values that cannot be parsed by time.ParseDuration. This
-// catches typos like "5mins" (should be "5m") at config load time rather than
-// silently defaulting to zero at runtime.
+// warnings for invalid values. This catches typos like "5mins" (should be
+// "5m") at config load time rather than silently defaulting to zero at runtime.
 func ValidateDurations(cfg *City, source string) []string {
 	var warnings []string
 	check := func(context, field, value string) {
 		if value == "" {
 			return
 		}
-		if _, err := time.ParseDuration(value); err != nil {
+		if _, err := parseConfigDurationWithDays(value); err != nil {
 			warnings = append(warnings, fmt.Sprintf(
 				"%s: %s %s = %q is not a valid duration: %v",
 				source, context, field, value, err))
@@ -51,6 +47,10 @@ func ValidateDurations(cfg *City, source string) []string {
 
 	// Orders config durations.
 	check("[orders]", "max_timeout", cfg.Orders.MaxTimeout)
+
+	for name, policy := range cfg.Beads.Policies {
+		check(fmt.Sprintf("[beads.policies.%s]", name), "delete_after_close", policy.DeleteAfterClose)
+	}
 
 	// Chat sessions config durations.
 	check("[chat_sessions]", "idle_timeout", cfg.ChatSessions.IdleTimeout)

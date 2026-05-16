@@ -382,6 +382,8 @@ type bdIssue struct {
 	IssueType    string       `json:"issue_type"`
 	Priority     *int         `json:"priority,omitempty"`
 	CreatedAt    time.Time    `json:"created_at"`
+	UpdatedAt    *time.Time   `json:"updated_at,omitempty"`
+	ClosedAt     *time.Time   `json:"closed_at,omitempty"`
 	Assignee     string       `json:"assignee"`
 	From         string       `json:"from"`
 	ParentID     string       `json:"parent"`
@@ -500,7 +502,7 @@ func (b *bdIssue) toBead() Bead {
 			}
 		}
 	}
-	return Bead{
+	bead := Bead{
 		ID:           b.ID,
 		Title:        b.Title,
 		Status:       mapBdStatus(b.Status),
@@ -518,6 +520,13 @@ func (b *bdIssue) toBead() Bead {
 		Dependencies: deps,
 		Ephemeral:    b.Ephemeral,
 	}
+	if b.UpdatedAt != nil {
+		bead.UpdatedAt = b.UpdatedAt.Truncate(time.Second)
+	}
+	if b.ClosedAt != nil {
+		bead.ClosedAt = b.ClosedAt.Truncate(time.Second)
+	}
+	return bead
 }
 
 func (b *bdIssue) normalizedDependencies() []Dep {
@@ -1026,6 +1035,12 @@ func (s *BdStore) List(query ListQuery) ([]Bead, error) {
 	if !query.CreatedBefore.IsZero() {
 		args = append(args, "--created-before", query.CreatedBefore.Format(time.RFC3339Nano))
 	}
+	if !query.UpdatedBefore.IsZero() {
+		args = append(args, "--updated-before", query.UpdatedBefore.Format(time.RFC3339Nano))
+	}
+	if !query.ClosedBefore.IsZero() {
+		args = append(args, "--closed-before", query.ClosedBefore.Format(time.RFC3339Nano))
+	}
 	args = append(args, "--include-infra", "--include-gates", "--limit", fmt.Sprintf("%d", limit))
 	if query.ParentID != "" {
 		args = append(args, "--parent", query.ParentID)
@@ -1077,6 +1092,9 @@ func (s *BdStore) listEphemeral(query ListQuery) ([]Bead, error) {
 	clauses, serverFilteredOnly = appendBdQueryClause(clauses, serverFilteredOnly, "type", query.Type)
 	clauses, serverFilteredOnly = appendBdQueryClause(clauses, serverFilteredOnly, "assignee", query.Assignee)
 	clauses, serverFilteredOnly = appendBdQueryClause(clauses, serverFilteredOnly, "parent", query.ParentID)
+	clauses, serverFilteredOnly = appendBdQueryBeforeClause(clauses, serverFilteredOnly, "created", query.CreatedBefore)
+	clauses, serverFilteredOnly = appendBdQueryBeforeClause(clauses, serverFilteredOnly, "updated", query.UpdatedBefore)
+	clauses, serverFilteredOnly = appendBdQueryBeforeClause(clauses, serverFilteredOnly, "closed", query.ClosedBefore)
 
 	args := []string{"query", "--json", strings.Join(clauses, " AND ")}
 	if query.IncludeClosed || query.Status == "closed" {
@@ -1113,7 +1131,7 @@ func (s *BdStore) listEphemeral(query ListQuery) ([]Bead, error) {
 }
 
 func canApplyWispsServerLimit(query ListQuery) bool {
-	return query.Sort == SortDefault && query.CreatedBefore.IsZero() && len(query.Metadata) == 0
+	return query.Sort == SortDefault && len(query.Metadata) == 0
 }
 
 func appendBdQueryClause(clauses []string, serverFilteredOnly bool, field, value string) ([]string, bool) {
@@ -1124,6 +1142,17 @@ func appendBdQueryClause(clauses []string, serverFilteredOnly bool, field, value
 		return clauses, false
 	}
 	return append(clauses, field+"="+value), serverFilteredOnly
+}
+
+func appendBdQueryBeforeClause(clauses []string, serverFilteredOnly bool, field string, before time.Time) ([]string, bool) {
+	if before.IsZero() {
+		return clauses, serverFilteredOnly
+	}
+	value := before.Format(time.RFC3339Nano)
+	if !isBareBdQueryValue(value) {
+		return clauses, false
+	}
+	return append(clauses, field+"<"+value), serverFilteredOnly
 }
 
 // isBareBdQueryValue reports whether value can be emitted unquoted into the bd

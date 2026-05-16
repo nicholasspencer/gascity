@@ -154,7 +154,7 @@ func (w *beadWire) toBead() beads.Bead {
 		cloned := *w.Priority
 		priority = &cloned
 	}
-	return beads.Bead{
+	bead := beads.Bead{
 		ID:          w.ID,
 		Title:       w.Title,
 		Status:      w.Status,
@@ -171,6 +171,13 @@ func (w *beadWire) toBead() beads.Bead {
 		Metadata:    coerceMetadata(w.Metadata),
 		Ephemeral:   w.Ephemeral,
 	}
+	if w.UpdatedAt != nil {
+		bead.UpdatedAt = *w.UpdatedAt
+	}
+	if w.ClosedAt != nil {
+		bead.ClosedAt = *w.ClosedAt
+	}
+	return bead
 }
 
 // coerceMetadata converts raw JSON metadata values to strings. Backing stores
@@ -308,7 +315,7 @@ func (s *Store) List(query beads.ListQuery) ([]beads.Bead, error) {
 		if query.Type != "" {
 			args = append(args, "--type="+query.Type)
 		}
-		if query.Limit > 0 && query.CreatedBefore.IsZero() {
+		if query.Limit > 0 && query.CreatedBefore.IsZero() && query.UpdatedBefore.IsZero() && query.ClosedBefore.IsZero() {
 			args = append(args, "--limit="+strconv.Itoa(query.Limit))
 		}
 		out, err = s.run(nil, args...)

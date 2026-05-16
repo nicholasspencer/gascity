@@ -459,6 +459,45 @@ name = "mayor"
 	}
 }
 
+func TestParseBeadPolicies(t *testing.T) {
+	data := []byte(`
+[workspace]
+name = "test-city"
+
+[beads]
+provider = "bd"
+
+[beads.policies.session]
+storage = "no_history"
+delete_after_close = "7d"
+
+[beads.policies.order_tracking]
+storage = "ephemeral"
+delete_after_close = "2h"
+
+[[agent]]
+name = "mayor"
+`)
+	cfg, err := Parse(data)
+	if err != nil {
+		t.Fatalf("Parse: %v", err)
+	}
+	sessionPolicy := cfg.Beads.Policies["session"]
+	if sessionPolicy.Storage != "no_history" {
+		t.Fatalf("session storage = %q, want no_history", sessionPolicy.Storage)
+	}
+	if got := sessionPolicy.DeleteAfterCloseDuration(); got != 7*24*time.Hour {
+		t.Fatalf("session delete_after_close = %v, want 168h", got)
+	}
+	trackingPolicy := cfg.Beads.Policies["order_tracking"]
+	if trackingPolicy.Storage != "ephemeral" {
+		t.Fatalf("order_tracking storage = %q, want ephemeral", trackingPolicy.Storage)
+	}
+	if got := trackingPolicy.DeleteAfterCloseDuration(); got != 2*time.Hour {
+		t.Fatalf("order_tracking delete_after_close = %v, want 2h", got)
+	}
+}
+
 func TestParseNoBeadsSection(t *testing.T) {
 	data := []byte(`
 [workspace]

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -1359,12 +1360,37 @@ func TestInstantiateRunnableWispRootPreservesTaskType(t *testing.T) {
 	if got := root.Metadata["gc.kind"]; got != "wisp" {
 		t.Fatalf("root gc.kind = %q, want wisp", got)
 	}
+	if !slices.Contains(root.Labels, WispLabel) {
+		t.Fatalf("root labels = %v, want %q", root.Labels, WispLabel)
+	}
 	ready, err := store.Ready()
 	if err != nil {
 		t.Fatalf("Ready: %v", err)
 	}
 	if len(ready) != 1 || ready[0].ID != result.RootID {
 		t.Fatalf("Ready() = %+v, want only root %s", ready, result.RootID)
+	}
+}
+
+func TestBuildRecipeApplyPlanLabelsWispRoot(t *testing.T) {
+	recipe := &formula.Recipe{
+		Name:     "patrol",
+		RootOnly: true,
+		Steps: []formula.RecipeStep{
+			{ID: "patrol", Title: "Patrol", Type: "task", IsRoot: true, Metadata: map[string]string{"gc.kind": "wisp"}},
+		},
+	}
+
+	plan, _, rootKey, err := buildRecipeApplyPlan(recipe, Options{})
+	if err != nil {
+		t.Fatalf("buildRecipeApplyPlan: %v", err)
+	}
+	root := nodeByKey(plan.Nodes, rootKey)
+	if root == nil {
+		t.Fatalf("root node %q not found in %+v", rootKey, plan.Nodes)
+	}
+	if !slices.Contains(root.Labels, WispLabel) {
+		t.Fatalf("root labels = %v, want %q", root.Labels, WispLabel)
 	}
 }
 

@@ -1,6 +1,7 @@
 package beads_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -503,13 +504,16 @@ func TestFileStoreRefreshesSameSizeExternalRewrite(t *testing.T) {
 		t.Fatalf("initial Get(%q): %v", created.ID, err)
 	}
 
-	beforeLen := len(f.Files[path])
-	if err := s1.Update(created.ID, beads.UpdateOpts{Title: ptr("bravo")}); err != nil {
-		t.Fatal(err)
+	before := append([]byte(nil), f.Files[path]...)
+	after := bytes.Replace(before, []byte(`"title": "alpha"`), []byte(`"title": "bravo"`), 1)
+	if bytes.Equal(before, after) {
+		t.Fatal("test fixture did not rewrite title")
 	}
-	afterLen := len(f.Files[path])
-	if beforeLen != afterLen {
-		t.Fatalf("expected same-size rewrite, got %d -> %d bytes", beforeLen, afterLen)
+	if len(before) != len(after) {
+		t.Fatalf("expected same-size rewrite, got %d -> %d bytes", len(before), len(after))
+	}
+	if err := f.WriteFile(path, after, 0o644); err != nil {
+		t.Fatal(err)
 	}
 
 	f.Calls = nil
@@ -540,23 +544,22 @@ func TestFileStoreMutatorReloadsSameSizeExternalRewriteWithUnchangedFreshness(t 
 	if err != nil {
 		t.Fatal(err)
 	}
-	writer, err := beads.OpenFileStore(f, path)
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	created, err := stale.Create(beads.Bead{Title: "alpha"})
 	if err != nil {
 		t.Fatal(err)
 	}
 	originalModTime := f.ModTimes[path]
-	originalLen := len(f.Files[path])
-
-	if err := writer.Update(created.ID, beads.UpdateOpts{Title: ptr("bravo")}); err != nil {
-		t.Fatalf("Update(%q) from second handle: %v", created.ID, err)
+	before := append([]byte(nil), f.Files[path]...)
+	after := bytes.Replace(before, []byte(`"title": "alpha"`), []byte(`"title": "bravo"`), 1)
+	if bytes.Equal(before, after) {
+		t.Fatal("test fixture did not rewrite title")
 	}
-	if gotLen := len(f.Files[path]); gotLen != originalLen {
-		t.Fatalf("expected same-size external rewrite, got %d -> %d bytes", originalLen, gotLen)
+	if len(before) != len(after) {
+		t.Fatalf("expected same-size external rewrite, got %d -> %d bytes", len(before), len(after))
+	}
+	if err := f.WriteFile(path, after, 0o644); err != nil {
+		t.Fatal(err)
 	}
 	f.ModTimes[path] = originalModTime
 

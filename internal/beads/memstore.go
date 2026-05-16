@@ -80,6 +80,7 @@ func (m *MemStore) Create(b Bead) (Bead, error) {
 		b.Type = "task"
 	}
 	b.CreatedAt = time.Now()
+	b.UpdatedAt = b.CreatedAt
 
 	stored := cloneBead(b)
 	m.beads = append(m.beads, stored)
@@ -109,11 +110,17 @@ func (m *MemStore) Update(id string, opts UpdateOpts) error {
 	defer m.mu.Unlock()
 	for i := range m.beads {
 		if m.beads[i].ID == id {
+			now := time.Now()
 			if opts.Title != nil {
 				m.beads[i].Title = *opts.Title
 			}
 			if opts.Status != nil {
 				m.beads[i].Status = *opts.Status
+				if *opts.Status == "closed" {
+					m.beads[i].ClosedAt = now
+				} else {
+					m.beads[i].ClosedAt = time.Time{}
+				}
 			}
 			if opts.Description != nil {
 				m.beads[i].Description = *opts.Description
@@ -154,6 +161,7 @@ func (m *MemStore) Update(id string, opts UpdateOpts) error {
 				}
 				m.beads[i].Labels = filtered
 			}
+			m.beads[i].UpdatedAt = now
 			return nil
 		}
 	}
@@ -167,7 +175,12 @@ func (m *MemStore) Close(id string) error {
 	defer m.mu.Unlock()
 	for i := range m.beads {
 		if m.beads[i].ID == id {
+			now := time.Now()
 			m.beads[i].Status = "closed"
+			m.beads[i].UpdatedAt = now
+			if m.beads[i].ClosedAt.IsZero() {
+				m.beads[i].ClosedAt = now
+			}
 			return nil
 		}
 	}
@@ -181,7 +194,9 @@ func (m *MemStore) Reopen(id string) error {
 	defer m.mu.Unlock()
 	for i := range m.beads {
 		if m.beads[i].ID == id {
+			m.beads[i].UpdatedAt = time.Now()
 			m.beads[i].Status = "open"
+			m.beads[i].ClosedAt = time.Time{}
 			return nil
 		}
 	}
@@ -201,7 +216,12 @@ func (m *MemStore) CloseAll(ids []string, metadata map[string]string) (int, erro
 		if !idSet[m.beads[i].ID] || m.beads[i].Status == "closed" {
 			continue
 		}
+		now := time.Now()
 		m.beads[i].Status = "closed"
+		m.beads[i].UpdatedAt = now
+		if m.beads[i].ClosedAt.IsZero() {
+			m.beads[i].ClosedAt = now
+		}
 		if m.beads[i].Metadata == nil {
 			m.beads[i].Metadata = make(map[string]string, len(metadata))
 		}

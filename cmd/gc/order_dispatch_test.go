@@ -2608,7 +2608,7 @@ func TestSweepOrphanedOrderTracking_ClosesOpenTrackingBeads(t *testing.T) {
 	}
 	_, err := store.Create(beads.Bead{
 		Title:  "order:legacy-issues-tier",
-		Labels: []string{"order-run:legacy-issues-tier", labelOrderTracking},
+		Labels: []string{"order-run:legacy-issues-tier", legacyLabelOrderTracking},
 	})
 	if err != nil {
 		t.Fatalf("Create(legacy-issues-tier): %v", err)
@@ -2649,6 +2649,12 @@ func TestSweepOrphanedOrderTracking_ClosesOpenTrackingBeads(t *testing.T) {
 	for _, b := range all {
 		if b.Status != "closed" {
 			t.Errorf("tracking bead %s (%s) still open", b.ID, b.Title)
+		}
+	}
+	legacy := trackingBeads(t, store, legacyLabelOrderTracking)
+	for _, b := range legacy {
+		if b.Status != "closed" {
+			t.Errorf("legacy tracking bead %s (%s) still open", b.ID, b.Title)
 		}
 	}
 
@@ -2924,7 +2930,8 @@ func TestSweepOrphanedOrderTracking_RetryOnTransientError(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	// Fail the first 2 ListByLabel calls, succeed on the 3rd.
+	// Fail the first 2 ListByLabel calls, succeed on the 3rd attempt. The
+	// successful attempt lists both the canonical and legacy tracking labels.
 	fs := &countFailStore{Store: inner, failCount: 2}
 	closed, err := sweepOrphanedOrderTrackingRetry(fs, 3, time.Millisecond)
 	if err != nil {
@@ -2933,8 +2940,8 @@ func TestSweepOrphanedOrderTracking_RetryOnTransientError(t *testing.T) {
 	if closed != 1 {
 		t.Fatalf("closed = %d, want 1", closed)
 	}
-	if fs.calls != 3 {
-		t.Fatalf("ListByLabel calls = %d, want 3", fs.calls)
+	if fs.calls != 4 {
+		t.Fatalf("ListByLabel calls = %d, want 4", fs.calls)
 	}
 }
 
@@ -2986,8 +2993,8 @@ func TestSweepOrphanedOrderTracking_RetryOnPartialClose(t *testing.T) {
 	if n != 3 {
 		t.Fatalf("n = %d, want 3 (accumulated across retries)", n)
 	}
-	if fs.listCalls != 3 {
-		t.Fatalf("ListByLabel calls = %d, want 3 (retry on partial close)", fs.listCalls)
+	if fs.listCalls != 6 {
+		t.Fatalf("ListByLabel calls = %d, want 6 (retry on partial close)", fs.listCalls)
 	}
 }
 
@@ -4338,6 +4345,26 @@ func TestOrderDispatchSkipsOpenTrackingBeadForConditionOrder(t *testing.T) {
 
 	if ran {
 		t.Error("exec should not have run while an order-tracking bead is open")
+	}
+}
+
+func TestHasOpenWorkStrictAcceptsLegacyOrderTrackingLabel(t *testing.T) {
+	store := beads.NewMemStore()
+	_, err := store.Create(beads.Bead{
+		Title:  "order:my-auto",
+		Labels: []string{"order-run:my-auto", legacyLabelOrderTracking},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	ad := &memoryOrderDispatcher{}
+	hasOpen, err := ad.hasOpenWorkStrict(store, "my-auto")
+	if err != nil {
+		t.Fatalf("hasOpenWorkStrict: %v", err)
+	}
+	if !hasOpen {
+		t.Fatal("hasOpenWorkStrict = false, want true for legacy order-tracking label")
 	}
 }
 
