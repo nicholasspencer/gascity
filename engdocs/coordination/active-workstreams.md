@@ -40,7 +40,8 @@ needed owner in `Reason`.
 
 - `green`: JSON rollup is final machine-move ready at
   `gastownhall/gascity:codex/json-rollup` commit `82a6253d`; PR #2349 is open
-  and labeled `status/needs-review`.
+  and labeled `status/reviewing`. Mabel has taken over mega wrap-up from
+  Jasmine.
 - `green`: Registry-gc-pack has Mabel's #2126 compatibility answer. #2126 does
   not add new registry-specific constraints beyond preserving `gc import
   migrate` until doctor parity, preserving legacy `gc pack fetch/list`, keeping
@@ -88,8 +89,10 @@ Known portable workstreams:
 
 Remaining move-readiness asks:
 
-- Jasmine: monitor PR #2349 CI/review and remediate failures if they are
-  branch-related.
+- Mabel: monitor PR #2349 review/merge pipeline state. Required CI is green;
+  a non-required Container Scan image-vulnerability check is currently failing
+  and should be treated as repo/baseline security signal unless Julian's merge
+  pipeline marks it blocking.
 - Grace: no blocking ask; gc4gc is portable.
 - Penelope: intentionally separate on another machine.
 
@@ -148,19 +151,24 @@ PR: #2349 <https://github.com/gastownhall/gascity/pull/2349>
 
 Base: `origin/main`
 
-Owner: Jasmine
+Owner: Mabel, inherited from Jasmine
 
 Worktree: `/Users/dbox/repos/gc/gascity-json-rollup`
 
 ### Latest State
 
-Jasmine owns the JSON rollout end to end. The previous many-small-PR strategy
-is replaced by a single JSON rollup / review-train PR so Julian can review one
-coherent `gc --json` / `--json-schema` surface instead of many small PRs.
+Mabel owns JSON rollout wrap-up from Jasmine's handoff. The previous
+many-small-PR strategy is replaced by a single JSON rollup / review-train PR
+so Julian can review one coherent `gc --json` / `--json-schema` surface
+instead of many small PRs.
 
 `codex/json-rollup` is pushed through commit `82a6253d` (`feat: add json
 output for session order actions`) and is final machine-move ready. PR #2349 is
-open and labeled `status/needs-review`.
+open and labeled `status/reviewing`. Live GitHub state refreshed by Mabel on
+2026-05-18 PT shows required CI green, no outstanding requested reviewers, and
+merge state still blocked by review/merge-pipeline state rather than known
+branch test failures. One non-required Container Scan image-vulnerability check
+is failing.
 
 Current JSON source of truth is this workstream section plus
 `codex/json-rollup`, not any individual JSON PR.
@@ -219,14 +227,15 @@ Excluded / superseded by the first train:
 
 ### Attention Needed
 
-Needs Mabel: no
+Needs Mabel: yes
 
 Needs D. Box: no
 
-Urgency: green
+Urgency: yellow
 
 Reason: first-rollup scope is assembled, pushed, PR-visible, and validated
-enough for machine move. Remaining work is normal PR CI/review follow-through.
+enough for machine move. Mabel is now tracking #2349 through review/merge and
+will close/abandon superseded feeder PRs only after #2349 merges.
 
 Structured failure JSON policy:
 
@@ -291,15 +300,18 @@ Local-only JSON work state:
 
 ### Needed From Other Agents
 
-- Jasmine: monitor PR #2349 CI/review and remediate any branch-related failure.
+- Mabel: monitor PR #2349 CI/review and remediate any branch-related failure.
+- Mabel: after #2349 merges, close/abandon the superseded feeder PRs with a
+  short pointer to #2349, then smoke latest `main` against gc4gc and mark JSON
+  landed here.
 - Cleo: flag any registry/gc pack command schema needs before freezing command
   output shapes.
-- Mabel: no blocking help needed yet; use this section as the current JSON
-  status if Donna asks from the Mabel thread.
+- Jasmine: no blocking help needed unless #2349 surfaces a branch-specific
+  regression that needs original rollout context.
 
 ### Last Updated
 
-2026-05-18 20:31 PT by Jasmine
+2026-05-18 20:50 PT by Mabel
 
 ### New Machine Bootstrap
 
