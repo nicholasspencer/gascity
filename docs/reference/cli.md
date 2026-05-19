@@ -115,6 +115,7 @@ gc agent add --name mayor
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--dir` | string |  | Working directory for the agent (relative to city root) |
+| `--json` | bool |  | Output in JSONL format |
 | `--name` | string |  | Name of the agent |
 | `--prompt-template` | string |  | Path to prompt template file (relative to city root) |
 | `--suspended` | bool |  | Register the agent in suspended state |
@@ -127,8 +128,12 @@ The reconciler will start the agent on its next tick. Supports bare
 names (resolved via rig context) and qualified names (e.g. "myrig/worker").
 
 ```
-gc agent resume <name>
+gc agent resume <name> [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc agent suspend
 
@@ -139,8 +144,12 @@ started or restarted. Existing sessions continue running but won't be
 replaced if they exit. Use "gc agent resume" to restore.
 
 ```
-gc agent suspend <name>
+gc agent suspend <name> [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc analyze
 
@@ -338,6 +347,7 @@ gc build-image [city-path] [flags]
 |------|------|---------|-------------|
 | `--base-image` | string | `gc-agent:latest` | base Docker image |
 | `--context-only` | bool |  | write build context without running docker build |
+| `--json` | bool |  | emit JSON summary |
 | `--push` | bool |  | push image after building |
 | `--rig-path` | stringSlice |  | rig name:path pairs (repeatable) |
 | `--tag` | string |  | image tag (required unless --context-only) |
@@ -1040,7 +1050,9 @@ gc event
 Record a custom event to the city event log.
 
 Best-effort: always exits 0 so bead hooks never fail. Supports
-attaching arbitrary JSON payloads.
+attaching arbitrary JSON payloads. JSON summaries report whether submission to
+the configured provider was attempted; the event bus does not acknowledge
+durable persistence.
 
 ```
 gc event emit <type> [flags]
@@ -1049,6 +1061,7 @@ gc event emit <type> [flags]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--actor` | string |  | Actor name (default: $GC_ALIAS, else $GC_AGENT, else $GC_SESSION_ID, else "human") |
+| `--json` | bool |  | emit JSON summary |
 | `--message` | string |  | Event message |
 | `--payload` | string |  | JSON payload to attach to the event |
 | `--subject` | string |  | Event subject (e.g. bead ID) |
@@ -1268,6 +1281,7 @@ gc handoff [subject] [message] [flags]
 |------|------|---------|-------------|
 | `--auto` | bool |  | Send handoff mail without requesting restart (for PreCompact hooks) |
 | `--hook-format` | string |  | format hook output for a provider |
+| `--json` | bool |  | emit JSON summary |
 | `--target` | string |  | Remote session alias or ID to handoff (kills only controller-restartable sessions) |
 
 ## gc help
@@ -1415,6 +1429,7 @@ gc init
 | `--bootstrap-profile` | string |  | bootstrap profile to apply for hosted/container defaults |
 | `--file` | string |  | path to a TOML file to use as city.toml |
 | `--from` | string |  | path to an example city directory to copy |
+| `--json` | bool |  | emit JSON summary |
 | `--name` | string |  | workspace name (default: target directory basename) |
 | `--preserve-existing` | bool |  | keep any pre-authored pack.toml, city.toml, or agent prompt files instead of overwriting them |
 | `--provider` | string |  | built-in workspace provider to use for the default mayor config |
@@ -1853,6 +1868,7 @@ gc prime [agent-name] [flags]
 |------|------|---------|-------------|
 | `--hook` | bool |  | compatibility mode for runtime hook invocations |
 | `--hook-format` | string |  | format hook output for a provider |
+| `--json` | bool |  | emit JSON summary |
 | `--strict` | bool |  | fail on missing city, missing or unknown agent, or unreadable prompt_template instead of falling back to the default prompt |
 
 ## gc prompt
@@ -2088,6 +2104,7 @@ gc rig add /path/to/project
 | `--adopt` | bool |  | adopt existing .beads/ directory (skip init) |
 | `--default-branch` | string |  | mainline branch (default: auto-detect from origin/HEAD or current branch) |
 | `--include` | stringArray |  | pack source for rig agents (repeatable; writes canonical rig imports) |
+| `--json` | bool |  | Output in JSONL format |
 | `--name` | string |  | rig name (default: directory basename) |
 | `--prefix` | string |  | bead ID prefix (default: derived from name) |
 | `--start-suspended` | bool |  | add rig in suspended state (dormant-by-default) |
@@ -2116,7 +2133,7 @@ Removes the rig entry from city.toml and removes its machine-local path
 binding from .gc/site.toml.
 
 ```
-gc rig remove <name>
+gc rig remove <name> [flags]
 ```
 
 **Example:**
@@ -2124,6 +2141,10 @@ gc rig remove <name>
 ```
 gc rig remove myrig
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc rig restart
 
@@ -2143,8 +2164,12 @@ Resume a suspended rig by clearing suspended in city.toml.
 The reconciler will start the rig's agents on its next tick.
 
 ```
-gc rig resume [name]
+gc rig resume [name] [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc rig set-endpoint
 
@@ -2181,6 +2206,7 @@ gc rig set-endpoint frontend --inherit
 | `--force` | bool |  | acknowledge conflicting managed-city state when using --self |
 | `--host` | string |  | external Dolt host |
 | `--inherit` | bool |  | inherit the city endpoint |
+| `--json` | bool |  | Output in JSONL format |
 | `--port` | string |  | external Dolt port (required with --external or --self) |
 | `--self` | bool |  | mark the rig as running its own local Dolt on 127.0.0.1 |
 | `--user` | string |  | external Dolt user |
@@ -2202,8 +2228,12 @@ the reconciler skips them and gc hook returns empty. The rig's beads
 database remains accessible. Use "gc rig resume" to restore.
 
 ```
-gc rig suspend [name]
+gc rig suspend [name] [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc runtime
 
@@ -2339,8 +2369,12 @@ The controller closes the current service process and starts a fresh one.
 Useful after updating pack scripts without a full city restart.
 
 ```
-gc service restart <name>
+gc service restart <name> [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc session
 
@@ -2463,6 +2497,7 @@ gc session logs mayor
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `-f`, `--follow` | bool |  | Follow new messages as they arrive |
+| `--json` | bool |  | emit JSONL result for the bounded snapshot |
 | `--tail` | int | `10` | Number of most recent transcript entries to show (0 = all; compact dividers count as entries) |
 
 ## gc session new
@@ -2524,6 +2559,7 @@ gc session peek <session-id-or-alias> [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--json` | bool |  | emit JSONL result |
 | `--lines` | int | `50` | number of lines to capture |
 
 ## gc session pin
@@ -2744,6 +2780,7 @@ gc skill list [flags]
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
 | `--agent` | string |  | show the effective skill view for this agent |
+| `--json` | bool |  | emit JSON summary |
 | `--session` | string |  | show the effective skill view for this session |
 
 ## gc sling
@@ -3129,6 +3166,7 @@ gc version [flags]
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
+| `--json` | bool |  | emit JSON summary |
 | `-l`, `--long` | bool |  | Include git commit and build date metadata |
 
 ## gc wait
@@ -3151,8 +3189,12 @@ gc wait
 Cancel a wait
 
 ```
-gc wait cancel <wait-id>
+gc wait cancel <wait-id> [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
 
 ## gc wait inspect
 
@@ -3185,5 +3227,9 @@ gc wait list [flags]
 Manually mark a wait ready
 
 ```
-gc wait ready <wait-id>
+gc wait ready <wait-id> [flags]
 ```
+
+| Flag | Type | Default | Description |
+|------|------|---------|-------------|
+| `--json` | bool |  | Output in JSONL format |
