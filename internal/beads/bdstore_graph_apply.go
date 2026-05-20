@@ -54,3 +54,10 @@ func (s *BdStore) ApplyGraphPlan(_ context.Context, plan *GraphApplyPlan) (*Grap
 	}
 	return &result, nil
 }
+
+// SupportsEphemeralGraphApply reports whether this store can apply a whole
+// graph directly into ephemeral storage. Current bd graph create preserves the
+// requested storage tier, so Gas City can use the atomic graph path.
+func (s *BdStore) SupportsEphemeralGraphApply() bool {
+	return true
+}
