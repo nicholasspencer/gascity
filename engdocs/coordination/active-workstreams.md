@@ -1,6 +1,6 @@
 # Active Workstream Coordination
 
-Last updated: 2026-05-20 UTC by Mabel after #2349 container-scan fix push
+Last updated: 2026-05-20 UTC by Mabel after #2349 CLI docs freshness fix push
 
 This is a temporary cross-agent coordination channel, not product documentation.
 Do not merge this file into public docs unless we explicitly promote it.
@@ -38,12 +38,14 @@ needed owner in `Reason`.
 
 ## Current Attention Summary
 
-- `green`: JSON rollup is final machine-move ready at
-  `gastownhall/gascity:codex/json-rollup` commit `f8e7a170`; PR #2349 is open
+- `yellow`: JSON rollup is final machine-move ready at
+  `gastownhall/gascity:codex/json-rollup` commit `d5c6f732`; PR #2349 is open
   and labeled `status/reviewing`. Mabel has taken over mega wrap-up from
-  Jasmine. Mabel patched the `gc-mcp-mail` Container Scan failure on this
-  branch by upgrading vulnerable Debian base-image packages; GitHub CI is
-  rerunning from `f8e7a170`.
+  Jasmine. Mabel patched the `gc-mcp-mail` Container Scan failure at
+  `f8e7a170`; the rerun then exposed a real generated-doc freshness failure
+  (`TestCLIDocsFreshness`, missing `gc agent list` in `docs/reference/cli.md`).
+  Mabel refreshed generated CLI docs and pushed `d5c6f732`; GitHub CI is
+  rerunning from that head.
 - `green`: Registry-gc-pack has Mabel's #2126 compatibility answer. #2126 does
   not add new registry-specific constraints beyond preserving `gc import
   migrate` until doctor parity, preserving legacy `gc pack fetch/list`, keeping
@@ -85,7 +87,7 @@ Mabel / coordination state:
 Known portable workstreams:
 
 - JSON: `gastownhall/gascity:codex/json-rollup` is final machine-move ready at
-  pushed commit `82a6253d`; review PR is #2349.
+  pushed commit `d5c6f732`; review PR is #2349.
 - Registry/gc pack: `gastownhall/gascity:codex/pack-registry-workstream`
   is final machine-move ready at pushed checkpoint `f82f3c4e`.
 - gc4gc: `donbox/gc4gc:master`, `donbox/gc4gc:codex/gc4gc-producer-dev`, and
@@ -96,8 +98,8 @@ Known portable workstreams:
 
 Remaining move-readiness asks:
 
-- Mabel: monitor PR #2349 review/merge pipeline state after pushed container
-  scan fix `f8e7a170`.
+- Mabel: monitor PR #2349 CI/review pipeline state after pushed CLI docs
+  freshness fix `d5c6f732`.
 - Grace: no blocking ask; gc4gc is portable.
 - Penelope: intentionally separate on another machine.
 
@@ -168,15 +170,17 @@ many-small-PR strategy is replaced by a single JSON rollup / review-train PR
 so Julian can review one coherent `gc --json` / `--json-schema` surface
 instead of many small PRs.
 
-`codex/json-rollup` is pushed through commit `f8e7a170` (`fix: refresh mail
-image vulnerable packages`) and is final machine-move ready. PR #2349 is
-open and labeled `status/reviewing`. Live GitHub state refreshed by Mabel on
-2026-05-19 PT shows required CI green, no outstanding requested reviewers, and
-merge state still blocked by review/merge-pipeline state rather than known
-branch test failures. On 2026-05-19 PT, Mabel patched the visible Container
-Scan failure by upgrading the vulnerable `gc-mcp-mail` Debian packages
-(`libcap2`, `libsystemd0`, `libudev1`) in `contrib/k8s/Dockerfile.mail` and
-pushed `f8e7a170`; GitHub CI is rerunning.
+`codex/json-rollup` is pushed through commit `d5c6f732` (`docs: refresh json
+CLI reference`) and is final machine-move ready. PR #2349 is open and labeled
+`status/reviewing`. On 2026-05-19 PT, Mabel patched the visible Container Scan
+failure by upgrading the vulnerable `gc-mcp-mail` Debian packages (`libcap2`,
+`libsystemd0`, `libudev1`) in `contrib/k8s/Dockerfile.mail` and pushed
+`f8e7a170`; the container scan rerun passed. The rerun then exposed
+`TestCLIDocsFreshness` failures in `cmd/gc` because `docs/reference/cli.md`
+was missing the generated `gc agent list` section. Mabel ran
+`go run ./cmd/genschema`, verified the patch against a temporary merge with
+current `origin/main`, and pushed `d5c6f732`; GitHub CI is rerunning from that
+head.
 
 Mabel dequeued the individual JSON feeder PRs on 2026-05-18 PT by removing
 `status/reviewing` and prepending a superseded-by-#2349 banner to each PR body.
@@ -190,7 +194,7 @@ Current JSON source of truth is this workstream section plus
 
 | PR | URL | Branch | Status | Role | Next owner |
 |---|---|---|---|---|---|
-| #2349 | <https://github.com/gastownhall/gascity/pull/2349> | `codex/json-rollup` | open, `status/reviewing`, required CI green | active rollup PR | Mabel tracks review/merge |
+| #2349 | <https://github.com/gastownhall/gascity/pull/2349> | `codex/json-rollup` | open, `status/reviewing`, CI rerunning from `d5c6f732` | active rollup PR | Mabel tracks CI/review/merge |
 | JSON feeder PRs | individual PR URLs | individual feeder branches | open, removed from `status/reviewing` and review requests | superseded/provenance-only; omit from routine wherearewe unless auditing feeders | Mabel closes after #2349 merges |
 
 ### Immediate Next Step
@@ -226,11 +230,12 @@ Nice follow-up:
 
 ### Open Decisions / Blockers
 
-- Review/merge-pipeline state is the remaining blocker for #2349 once the
-  rerun from `f8e7a170` completes.
+- CI/review/merge-pipeline state is the remaining blocker for #2349 once the
+  rerun from `d5c6f732` completes.
 - Container Scan failure was real base-image package exposure, not a JSON code
   failure; Mabel patched it directly on the JSON rollup to avoid another stray
-  PR.
+  PR. The follow-on failure was generated CLI docs freshness, also patched
+  directly on the rollup.
 - No Donna, Chris, Jasmine, Cleo, Grace, or Penelope decision is currently
   required for JSON.
 
@@ -338,10 +343,14 @@ Validation matrix for `codex/json-rollup`:
 - `gc4gc` smoke tests: passed for JSON parseability and empty stderr on
   `status --json`, `status --json-schema`, `session list --json`,
   `rig list --json`, `formula list --json`, and `order list --json`.
+- `go run ./cmd/genschema`: passed on the new machine after the CLI docs
+  freshness failure.
+- Temporary merge-worktree check with current `origin/main` plus the docs
+  patch: `go test ./cmd/gc -run TestCLIDocsFreshness -count=1` passed.
 
 Local-only JSON work state:
 
-- The rollup branch is pushed at `origin/codex/json-rollup` through `f8e7a170`.
+- The rollup branch is pushed at `origin/codex/json-rollup` through `d5c6f732`.
 - No meaningful JSON code changes are local-only.
 - All intended first-rollup feeder branches are either incorporated or
   superseded by #2349.
@@ -398,8 +407,8 @@ Worktrees to create:
 
 Local-only state:
 
-- None for JSON rollup code through pushed commit `f8e7a170`; container-scan
-  rerun is pending.
+- None for JSON rollup code/docs through pushed commit `d5c6f732`; CI rerun is
+  pending.
 - No old JSON fan-out worktree is needed to continue the rollout on a new
   machine.
 
@@ -416,7 +425,7 @@ gh pr view 2349 --json number,state,mergeStateStatus,labels,statusCheckRollup
 Old-machine worktrees safe to ignore:
 
 - All individual JSON shard worktrees after #2349 exists and `codex/json-rollup`
-  is fetched at `82a6253d` or later.
+  is fetched at `d5c6f732` or later.
 - Deleted/gone provenance branches for already-merged or superseded JSON PRs.
 
 Old-machine worktrees that must not be deleted yet:
@@ -433,7 +442,7 @@ Exact first prompt for Jasmine on a new machine:
 > `origin/codex/workstream-coordination`. Clone/fetch `gastownhall/gascity`,
 > create worktrees for `codex/workstream-coordination` and
 > `codex/json-rollup`, then continue monitoring PR #2349 from pushed commit
-> `f8e7a170`. Refresh CI/review state, remediate branch-related failures, and
+> `d5c6f732`. Refresh CI/review state, remediate branch-related failures, and
 > treat the old individual JSON PRs/branches as superseded by #2349 unless
 > explicitly reopened.
 
