@@ -676,7 +676,7 @@ Branch: `codex/pack-registry-workstream`
 
 PR: draft #2351, <https://github.com/gastownhall/gascity/pull/2351>
 
-Base: `upstream/main` / `gastownhall/gascity@03c80562`
+Base: `upstream/main` / `gastownhall/gascity@07b5f590`
 
 Owner: Cleo
 
@@ -685,9 +685,9 @@ Current implementation worktree:
 - Worktree: `/Users/dbox/repos/gc/gc-pr2119`
 - Current branch: `codex/pack-registry-workstream`
 - Pushed branch: `gastownhall/gascity:codex/pack-registry-workstream`
-- Current checkpoint commit: `099f7ccf`
-- State: pushed; local validation and live PR #2351 required CI are green; PR
-  remains draft/not queued.
+- Current checkpoint commit: `f4c27184`
+- State: pushed; local validation is green after upmerging current `main`; live
+  PR #2351 CI is running/queued for the new head; PR remains draft/not queued.
 - Machine-move readiness: complete.
 
 Older local branches have been inspected and are not required by the new
@@ -714,7 +714,11 @@ The registry/gc pack source of truth is now
 Cleo resumed #2351 on the new machine from checkpoint `f82f3c4e`, completed the
 first cleanup/default-registry slice, and pushed checkpoint `642d4c2b`. Cleo
 then completed the dependency-command/doctor parity wave and pushed checkpoint
-`099f7ccf`. PR #2351 remains draft and not queued. Stable gc4gc is verified as safe to consume from
+`099f7ccf`. Cleo upmerged current `origin/main` at `07b5f590`, carried PackV2
+doc links to their new `engdocs/design/packv2` location, aligned new pack JSON
+schemas with the `ok: true` success-envelope convention from #2349, and pushed
+checkpoint `f4c27184`. PR #2351 remains draft and not queued. Stable gc4gc is
+verified as safe to consume from
 `/Users/dbox/repos/gc/gc4gc` on `master` at
 `8d992e5336e20aaa70577ce58b368c72592a73cd`, with runtime
 `/Users/dbox/repos/gc/gascity-agent-runtime` on
@@ -726,12 +730,10 @@ work: `codex/gc4gc-runtime-main-2313-json` at
 `0ae2ba20`. Treat this as the dogfood/review runtime, distinct from the
 previous stable-consumer bootstrap runtime above.
 
-Live #2351 state at `099f7ccf`:
+Live #2351 state at `f4c27184`:
 
-- Required CI is green at this checkpoint: `CI / required`, `CI / preflight`,
-  and `CI / integration` all passed, along with CodeQL, the `cmd/gc process`
-  shards, integration package shards, preflight static/generated-artifact gates,
-  dashboard checks, worker-core checks, and Mintlify deployment.
+- Required CI has been kicked off for this checkpoint and is currently
+  queued/running; previous checkpoint `099f7ccf` was fully green.
 - Merge state remains blocked by draft/review sequencing.
 - Branch is clean and pushed to `origin/codex/pack-registry-workstream`.
 
@@ -783,12 +785,15 @@ Local verification passing:
 - `go test ./internal/packsource ./internal/packregistry ./internal/packman ./internal/config ./internal/gchome ./internal/testenv`
 - `make lint-full`
 - `make check-docs`
+- `make check-schema`
 - Focused `cmd/gc` registry/import/doctor/scope matrix including
   `TestScanAllOrdersRemoteImportedFlatPackOrders`,
   `TestPackRegistryJSON`, `TestPackScopeContracts`,
   `TestImportStateDoctorCheck`, and init default-registry tests.
 - `git diff --check`
-- Donna manual-test binary: `/Users/dbox/repos/gc/.runtime/bin/gc-pr2351-099f7ccf`
+- Donna manual-test binary remains:
+  `/Users/dbox/repos/gc/.runtime/bin/gc-pr2351-099f7ccf`; rebuild it from
+  `f4c27184` before another manual pass.
 
 ### PRs In Play
 
@@ -804,7 +809,8 @@ Local verification passing:
 - Mabel and D. Box decide when to move #2351 from draft/review-train staging
   into active review.
 - Cleo keeps #2351 stable unless coordinating a product-surface change; next
-  implementation work should start from the CI-green `642d4c2b` checkpoint.
+  implementation work should start from the pushed `f4c27184` checkpoint after
+  live CI completes.
 - Cleo/Penelope coordinate through the unlisted pack reuse handoff gist before
   touching user-facing import/registry shape:
   <https://gist.github.com/donbox/e3b14792a004fd71be9d1048fea6f10c>.
@@ -838,8 +844,8 @@ Nice follow-up:
 - #2351 does not implement #2129 explicit `[[exports]]`.
 - #2351 does not replace `gc import migrate`.
 - Dependency `gc pack show`, `gc pack outdated`, and canonical dependency
-  `gc pack list` are deferred; existing `gc pack list` remains the legacy
-  `[packs]` status command.
+  `gc pack list` are implemented in this wave; legacy `[packs]` cache-status
+  listing remains available through `gc pack list --legacy`.
 - Do not fold PackV2 deprecation enforcement into #2351 except for explicit
   compatibility checkpoints.
 
@@ -847,7 +853,7 @@ Nice follow-up:
 
 - Sequencing decision: when to move #2351 from draft into active review.
 - Review capacity is the practical blocker; #2349 and #2318 are already active.
-- There are no current branch CI blockers at `642d4c2b`.
+- No local blockers are known at `f4c27184`; live CI is still running/queued.
 - Future explicit `[[exports]]` implementation needs an issue/owner before the
   registry/gc pack workstream is called fully closed.
 - Coordinate with Jasmine/Mabel if #2349 changes JSON/failure-schema
