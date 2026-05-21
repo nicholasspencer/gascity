@@ -340,7 +340,18 @@ func needsConvoyRecovery(q BeadQuerier, b beads.Bead, deps SlingDeps, opts BeadC
 	if err != nil {
 		return true
 	}
-	return parent.Type == "convoy" && parent.Status == "closed"
+	if parent.Type == "convoy" {
+		return convoycore.IsTerminalStatus(parent.Status)
+	}
+	if sourceworkflow.IsWorkflowRoot(parent) {
+		return false
+	}
+	// Ordinary parent beads do not own the routing lifecycle. A routed child
+	// without a live tracking convoy needs finalize to run again so the missing
+	// auto-convoy can be recreated; finalize is idempotent for an already-routed
+	// bead because CheckBeadState preserves the routed metadata and only repairs
+	// the missing tracking attachment.
+	return true
 }
 
 func hasLiveTrackingConvoy(store beads.Store, itemID string) bool {
