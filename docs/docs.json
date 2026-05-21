@@ -94,6 +94,7 @@
         "group": "Guides",
         "pages": [
           "guides/index",
+          "guides/reusing-and-customizing-packs",
           "guides/shareable-packs"
         ]
       },

@@ -9,9 +9,9 @@
 | Related | [PR #2119](https://github.com/gastownhall/gascity/pull/2119) |
 | Supersedes | Current `transitive` / `export` import surface |
 
-Design note for a simpler pack import/export model that replaces the current
-`transitive = ...` and `export = ...` behavior with explicit imports plus
-explicit exports.
+Design note for a simpler pack import/export model that keeps the PackV2
+`[imports.*]` mechanism and replaces the current `transitive = ...` and
+`export = ...` behavior with explicit `[export]`.
 
 ## Summary
 
@@ -30,7 +30,7 @@ see and too easy to misuse.
 
 The direction proposed here is:
 
-- imports are private/internal by default
+- imported pack surfaces are private/internal by default
 - exports define the public API
 - public exposure is explicit and intentional
 
@@ -53,7 +53,7 @@ As-built, the current system is effectively trying to represent three modes:
 Those are real product modes, but the user has to reverse-engineer them from
 `transitive` and `export`.
 
-### Import bindings leak into public API
+### Import binding names leak into public API
 
 A stronger design smell is that subordinate import binding names can become
 part of a pack's public surface.
@@ -93,7 +93,7 @@ Separate these concepts cleanly:
 In other words:
 
 - `[imports.*]` is internal wiring
-- `[[exports]]` defines the public API
+- `[export]` defines the public API
 
 ### Imports are private by default
 
@@ -108,7 +108,7 @@ That import binding is local to `B` unless `B` deliberately exports it.
 ### Exports are explicit
 
 If `B` wants to expose something from its imported packs, it does so
-explicitly through `[[exports]]`.
+explicitly through `[export]`.
 
 This gives a clean rule:
 
@@ -118,35 +118,35 @@ This gives a clean rule:
 ## Proposed Surface
 
 ```toml
+[pack]
+name = "b"
+schema = 1
+
 [imports.c]
-source = "<path-to-c>"
+source = "../c"
 
 [imports.d]
-source = "<path-to-d>"
+source = "../d"
 
 [imports.e]
-source = "<path-to-e>"
+source = "../e"
 
 [imports.f]
-source = "<path-to-f>"
+source = "../f"
 
 [imports.g]
-source = "<path-to-g>"
+source = "../g"
 
-[[exports]]
-from = "c"
+[export.c]
 as = "c"
 
-[[exports]]
-from = "d"
+[export.d]
 as = "c"
 
-[[exports]]
-from = "e"
+[export.e]
 as = "."
 
-[[exports]]
-from = "f"
+[export.f]
 as = "."
 ```
 
@@ -165,14 +165,14 @@ as = "."
 - `as = "."`
   - facade export into this pack's own public top level
 
-No `[[exports]]` entry means:
+No `[export]` entry means:
 
 - internal-only import
 
 ## Public Naming Rule
 
-If pack `A` imports pack `B` as `b`, then `A` should see `B`'s public surface
-under `b.*`.
+If pack `A` imports pack `B` and exposes it as `b`, then `A` should see `B`'s
+public surface under `b.*`.
 
 That gives a clean invariant:
 
@@ -192,11 +192,12 @@ Examples:
 This is much cleaner than letting subordinate binding names leak upward as
 unexpected peers.
 
-## What Happens to `transitive`
+## What Happens to `transitive` / legacy `export`
 
 Current recommendation:
 
 - remove `transitive` from the user-facing syntax
+- replace legacy `export = ...` behavior with `[export]`
 
 Instead, recursive visibility should come from public APIs composing normally.
 
@@ -231,8 +232,8 @@ Possible later addition:
 
 Important note:
 
-- imported definitions should still stay private by default unless explicitly
-  exported
+- imported definitions should stay private by default unless explicitly
+  exported through `[export]`
 
 ## Collisions
 
@@ -277,18 +278,18 @@ Most importantly, it aligns with the mental model people tend to expect:
    drilling into its private internals?
    - current recommendation: public API only
 5. When the newer `gc pack` / pack registry work lands, how much should CLI
-   authoring help generate or validate `[[exports]]`?
+   authoring help generate or validate `[export]`?
 
 ## Recommendation
 
 The recommended next step is:
 
 1. socialize this note and gather product feedback
-2. confirm the explicit `[[exports]]` direction
-3. queue the implementation work behind the current PackV2 deprecation,
-   `gc pack`, and pack registry waves
+2. confirm the explicit `[export]` direction
+3. queue the `[export]` implementation work behind the current PackV2
+   deprecation, `gc pack`, and pack registry waves
 
 Short version:
 
-- explicit imports plus explicit exports is the cleaner model
-- we believe we are on the right track with `[[exports]]`
+- PackV2 imports plus explicit `[export]` is the cleaner model
+- we believe we are on the right track with `[export]`
