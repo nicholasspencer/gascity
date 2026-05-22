@@ -231,6 +231,7 @@ func TestGastown_PolecatImplementsRefineryMerges(t *testing.T) {
 
 	// Add the rig via gc rig add (initializes beads, hooks, routes).
 	c.RigAdd(rigDir, "packs/gastown")
+	seedGastownClaudeProjects(t, c, rigName)
 
 	// Start with polecat suspended so we can verify the attached-formula
 	// queue invariants before any worker claims the work.
@@ -635,6 +636,7 @@ func seedGastownClaudeProjects(t *testing.T, c *helpers.City, rigName string) {
 	for _, path := range []string{
 		filepath.Join(c.Dir, ".gc", "agents", rigName, "witness"),
 		filepath.Join(c.Dir, ".gc", "worktrees", rigName, "refinery"),
+		filepath.Join(c.Dir, ".gc", "worktrees", rigName, "polecats", "gastown.furiosa"),
 		filepath.Join(c.Dir, ".gc", "worktrees", rigName, "polecats", "polecat"),
 	} {
 		seedClaudeProjectState(t, c, path)
