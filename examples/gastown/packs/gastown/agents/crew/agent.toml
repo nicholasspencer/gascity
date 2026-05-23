@@ -15,4 +15,6 @@ wake_mode = "resume"
 work_dir = ".gc/worktrees/{{.Rig}}/crew/{{.AgentBase}}"
 nudge = "Run gc prime; then check your hook and mail."
 pre_start = ["{{.ConfigDir}}/assets/scripts/clone-setup.sh {{.RigRoot}} {{.WorkDir}} {{.AgentBase}}"]
-max_active_sessions = 1
+# No max_active_sessions: each crew member is an explicit [[named_session]] in
+# city.toml. The session count is bounded by the declarations, the same way
+# witness/refinery aren't capped.
