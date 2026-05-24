@@ -10,9 +10,14 @@ func (s *HQStore) PurgeExpired() (int, error) {
 	s.counters.PurgeExpired.Add(1)
 	now := time.Now()
 
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return 0, err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return 0, err
 	}
 
@@ -33,10 +38,15 @@ func (s *HQStore) PurgeExpired() (int, error) {
 	for _, id := range ids {
 		s.deleteLocked(id)
 	}
-	if len(ids) > 0 {
-		s.counters.PurgeExpiredN.Add(int64(len(ids)))
+	purged := len(ids)
+	if purged > 0 {
+		s.counters.PurgeExpiredN.Add(int64(purged))
 	}
-	return len(ids), nil
+	s.mu.Unlock()
+	if err := finish(purged > 0); err != nil {
+		return 0, err
+	}
+	return purged, nil
 }
 
 func hqBeadExpiresAt(b Bead) (time.Time, bool) {

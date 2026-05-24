@@ -40,15 +40,22 @@ func (s *HQStore) resetCoreLocked() {
 // Create persists a new bead.
 func (s *HQStore) Create(b Bead) (Bead, error) {
 	s.counters.Create.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return Bead{}, err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return Bead{}, err
 	}
 
 	stored := s.normalizeCreateLocked(b)
 	if _, ok := s.findLocked(stored.ID); ok {
 		s.counters.DuplicateCreate.Add(1)
+		s.mu.Unlock()
+		_ = finish(false)
 		return Bead{}, fmt.Errorf("creating bead %q: duplicate id", stored.ID)
 	}
 
@@ -56,7 +63,12 @@ func (s *HQStore) Create(b Bead) (Bead, error) {
 	for _, dep := range depsFromNeeds(stored) {
 		s.depAddCoreLocked(dep.IssueID, dep.DependsOnID, dep.Type)
 	}
-	return cloneBead(stored), nil
+	out := cloneBead(stored)
+	s.mu.Unlock()
+	if err := finish(true); err != nil {
+		return Bead{}, err
+	}
+	return out, nil
 }
 
 func (s *HQStore) normalizeCreateLocked(b Bead) Bead {
@@ -83,6 +95,9 @@ func (s *HQStore) normalizeCreateLocked(b Bead) Bead {
 // Get retrieves a bead by ID.
 func (s *HQStore) Get(id string) (Bead, error) {
 	s.counters.Get.Add(1)
+	if err := s.refreshSnapshotForRead(); err != nil {
+		return Bead{}, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	if b, ok := s.main[id]; ok {
@@ -98,14 +113,21 @@ func (s *HQStore) Get(id string) (Bead, error) {
 // Update modifies fields of an existing bead.
 func (s *HQStore) Update(id string, opts UpdateOpts) error {
 	s.counters.Update.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	b, ok := s.findLocked(id)
 	if !ok {
 		s.counters.UpdateNotFound.Add(1)
+		s.mu.Unlock()
+		_ = finish(false)
 		return fmt.Errorf("updating bead %q: %w", id, ErrNotFound)
 	}
 	wasClosed := b.Status == "closed"
@@ -121,61 +143,85 @@ func (s *HQStore) Update(id string, opts UpdateOpts) error {
 		}
 	}
 	s.upsertOwnedLocked(b)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // Close sets a bead's status to closed.
 func (s *HQStore) Close(id string) error {
 	s.counters.Close.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	b, ok := s.findLocked(id)
 	if !ok {
 		s.counters.CloseNotFound.Add(1)
+		s.mu.Unlock()
+		_ = finish(false)
 		return fmt.Errorf("closing bead %q: %w", id, ErrNotFound)
 	}
 	if b.Status == "closed" {
-		return nil
+		s.mu.Unlock()
+		return finish(false)
 	}
 	now := time.Now()
 	b.Status = "closed"
 	b.UpdatedAt = now
 	hqStampClosedAt(&b, now)
 	s.upsertOwnedLocked(b)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // Reopen sets a bead's status to open.
 func (s *HQStore) Reopen(id string) error {
 	s.counters.Reopen.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	b, ok := s.findLocked(id)
 	if !ok {
+		s.mu.Unlock()
+		_ = finish(false)
 		return fmt.Errorf("reopening bead %q: %w", id, ErrNotFound)
 	}
 	if b.Status == "open" {
-		return nil
+		s.mu.Unlock()
+		return finish(false)
 	}
 	b.Status = "open"
 	b.UpdatedAt = time.Now()
 	hqClearClosedAt(&b)
 	s.upsertOwnedLocked(b)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // CloseAll closes multiple beads and applies metadata to each closed bead.
 func (s *HQStore) CloseAll(ids []string, metadata map[string]string) (int, error) {
 	s.counters.CloseAll.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return 0, err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return 0, err
 	}
 
@@ -204,6 +250,10 @@ func (s *HQStore) CloseAll(ids []string, metadata map[string]string) (int, error
 		s.upsertOwnedLocked(b)
 		changed++
 	}
+	s.mu.Unlock()
+	if err := finish(changed > 0); err != nil {
+		return 0, err
+	}
 	return changed, nil
 }
 
@@ -213,6 +263,9 @@ func (s *HQStore) List(query ListQuery) ([]Bead, error) {
 	if !query.HasFilter() && !query.AllowScan {
 		return nil, fmt.Errorf("listing beads: %w", ErrQueryRequiresScan)
 	}
+	if err := s.refreshSnapshotForRead(); err != nil {
+		return nil, err
+	}
 	// Keep filtered queries on the full path so Limit cannot hide older matches.
 	if query.Sort == SortCreatedDesc && query.Limit > 0 && query.AllowScan && !query.HasFilter() {
 		return s.listRecentDesc(query), nil
@@ -220,24 +273,23 @@ func (s *HQStore) List(query ListQuery) ([]Bead, error) {
 	s.mu.RLock()
 
 	candidates := s.candidateIDsLocked(query)
-	raw := make([]Bead, 0, len(candidates))
+	snapshot := make([]Bead, 0, len(candidates))
 	for _, id := range s.iterationIDsLocked(query, candidates) {
 		if _, ok := candidates[id]; !ok {
 			continue
 		}
 		if b, ok := s.main[id]; ok {
-			raw = append(raw, b)
+			snapshot = append(snapshot, cloneBead(b))
 			continue
 		}
 		if b, ok := s.wisps[id]; ok {
-			raw = append(raw, b)
+			snapshot = append(snapshot, cloneBead(b))
 		}
 	}
 	s.mu.RUnlock()
 
-	result := make([]Bead, 0, len(raw))
-	for _, b := range raw {
-		b = cloneBead(b)
+	result := make([]Bead, 0, len(snapshot))
+	for _, b := range snapshot {
 		if query.Matches(b) {
 			result = append(result, b)
 		}
@@ -301,6 +353,9 @@ func (s *HQStore) ListOpen(status ...string) ([]Bead, error) {
 func (s *HQStore) Ready(query ...ReadyQuery) ([]Bead, error) {
 	s.counters.Ready.Add(1)
 	q := readyQueryFromArgs(query)
+	if err := s.refreshSnapshotForRead(); err != nil {
+		return nil, err
+	}
 	s.mu.RLock()
 
 	candidateIDs := s.readyCandidateIDsLocked(q)
@@ -439,13 +494,20 @@ func (s *HQStore) SetMetadataBatch(id string, kvs map[string]string) error {
 	if len(kvs) == 0 {
 		return nil
 	}
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	b, ok := s.findLocked(id)
 	if !ok {
+		s.mu.Unlock()
+		_ = finish(false)
 		return fmt.Errorf("setting metadata batch on %q: %w", id, ErrNotFound)
 	}
 	if b.Metadata == nil {
@@ -456,55 +518,79 @@ func (s *HQStore) SetMetadataBatch(id string, kvs map[string]string) error {
 	}
 	b.UpdatedAt = time.Now()
 	s.upsertOwnedLocked(b)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // Delete permanently removes a bead and dependency edges touching it.
 func (s *HQStore) Delete(id string) error {
 	s.counters.Delete.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	if _, ok := s.findLocked(id); !ok {
 		s.counters.DeleteNotFound.Add(1)
+		s.mu.Unlock()
+		_ = finish(false)
 		return fmt.Errorf("deleting bead %q: %w", id, ErrNotFound)
 	}
 	s.deleteLocked(id)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // DepAdd records a dependency.
 func (s *HQStore) DepAdd(issueID, dependsOnID, depType string) error {
 	s.counters.DepAdd.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	if depType == "" {
 		depType = "blocks"
 	}
 	s.depAddCoreLocked(issueID, dependsOnID, depType)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // DepRemove removes a dependency between two beads.
 func (s *HQStore) DepRemove(issueID, dependsOnID string) error {
 	s.counters.DepRemove.Add(1)
+	finish, err := s.beginLiveWrite()
+	if err != nil {
+		return err
+	}
 	s.mu.Lock()
-	defer s.mu.Unlock()
 	if err := s.ensureOpenLocked(); err != nil {
+		s.mu.Unlock()
+		_ = finish(false)
 		return err
 	}
 	s.depRemoveCoreLocked(issueID, dependsOnID)
-	return nil
+	s.mu.Unlock()
+	return finish(true)
 }
 
 // DepList returns dependencies in the requested direction.
 func (s *HQStore) DepList(id, direction string) ([]Dep, error) {
 	s.counters.DepList.Add(1)
+	if err := s.refreshSnapshotForRead(); err != nil {
+		return nil, err
+	}
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	var result []Dep

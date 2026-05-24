@@ -1152,6 +1152,22 @@ func openCompatibleFileStore(scopeRoot, cityPath string) (*beads.FileStore, erro
 	return openScopeLocalFileStore(cityPath)
 }
 
+func openHQStoreAt(scopeRoot, cityPath string) (*beads.HQStore, error) {
+	cfg, err := loadCityConfig(cityPath, io.Discard)
+	if err != nil {
+		cfg = nil
+	}
+	storeDir := filepath.Join(scopeRoot, ".gc", "hqstore")
+	return beads.OpenHQStore(
+		storeDir,
+		beads.WithHQStoreIDPrefix(issuePrefixForScope(scopeRoot, cityPath, cfg)),
+		beads.WithHQStoreTTLInterval(time.Minute),
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+		beads.WithHQStoreLocker(beads.NewFileFlock(filepath.Join(storeDir, "snapshot.lock"))),
+	)
+}
+
 func openStoreAtForCity(storePath, cityPath string) (beads.Store, error) {
 	runtimeCityPath := cityPath
 	if runtimeCityPath == "" {
@@ -1191,6 +1207,8 @@ func openStoreAtForCity(storePath, cityPath string) (beads.Store, error) {
 	switch provider {
 	case "file":
 		return openCompatibleFileStore(scopeRoot, runtimeCityPath)
+	case "hqstore":
+		return openHQStoreAt(scopeRoot, runtimeCityPath)
 	default: // "bd" or unrecognized → use bd
 		if _, err := exec.LookPath("bd"); err != nil {
 			return nil, fmt.Errorf("bd not found in PATH (install beads or set GC_BEADS=file)")

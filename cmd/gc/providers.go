@@ -626,7 +626,7 @@ func bdProviderMismatchHint(scopeRoot, resolvedProvider string) string {
 // beadsProvider returns the bead store provider name for lifecycle operations.
 // Maps "bd" → "exec:<cityPath>/.gc/system/packs/bd/assets/scripts/gc-beads-bd.sh"
 // so all lifecycle operations route through the exec: protocol. Other providers
-// pass through unchanged.
+// such as "file", "hqstore", and custom exec providers pass through unchanged.
 //
 // Related env vars:
 //   - GC_DOLT=skip — the gc-beads-bd script checks this and exits 2 for all

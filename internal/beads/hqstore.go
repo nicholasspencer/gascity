@@ -53,12 +53,11 @@ type EntryCounters struct {
 	PurgeExpiredN    atomic.Int64
 }
 
-// HQStore is a dormant, snapshot-backed in-process Store implementation for the
+// HQStore is a snapshot-backed in-process Store implementation for the
 // coordination-store migration experiments. Writes mutate an in-memory indexed
-// core with no per-write fsync; durability comes from an async background
-// snapshotter that periodically serializes the whole store to a gzip-compressed
-// JSONL file and publishes it via atomic rename. It is not wired into live city
-// storage; callers must opt in by opening it directly.
+// core with no per-write fsync by default; durability comes from either an
+// async background snapshotter or opt-in snapshot-on-write mode for live city
+// command processes.
 type HQStore struct {
 	mu sync.RWMutex
 
@@ -89,6 +88,10 @@ type HQStore struct {
 	snapErrMu        sync.Mutex
 	snapErr          error
 
+	writeMu         sync.Mutex
+	locker          Locker
+	snapshotOnWrite bool
+
 	counters EntryCounters
 }
 
@@ -97,6 +100,8 @@ type hqStoreOptions struct {
 	ttlInterval      time.Duration
 	closedRetention  time.Duration
 	snapshotInterval time.Duration
+	snapshotOnWrite  bool
+	locker           Locker
 }
 
 // HQStoreOption customizes OpenHQStore.
@@ -137,6 +142,23 @@ func WithHQStoreSnapshotInterval(d time.Duration) HQStoreOption {
 	}
 }
 
+// WithHQStoreSnapshotOnWrite makes every successful write flush a snapshot.
+// This is intended for live command-process use where the process may exit
+// before the background snapshotter ticks.
+func WithHQStoreSnapshotOnWrite(enabled bool) HQStoreOption {
+	return func(o *hqStoreOptions) {
+		o.snapshotOnWrite = enabled
+	}
+}
+
+// WithHQStoreLocker sets the cross-process write lock used by snapshot-on-write
+// mode. Nil keeps the default no-op locker.
+func WithHQStoreLocker(locker Locker) HQStoreOption {
+	return func(o *hqStoreOptions) {
+		o.locker = locker
+	}
+}
+
 // OpenHQStore opens or creates a dormant HQStore rooted at dir. If a snapshot
 // is present it is loaded to rebuild in-memory state and indexes.
 func OpenHQStore(dir string, opts ...HQStoreOption) (*HQStore, error) {
@@ -144,9 +166,13 @@ func OpenHQStore(dir string, opts ...HQStoreOption) (*HQStore, error) {
 		prefix:           "hq",
 		closedRetention:  hqDefaultClosedTaskRetention,
 		snapshotInterval: hqDefaultSnapshotInterval,
+		locker:           nopLocker{},
 	}
 	for _, opt := range opts {
 		opt(&cfg)
+	}
+	if cfg.locker == nil {
+		cfg.locker = nopLocker{}
 	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("opening hqstore: %w", err)
@@ -158,6 +184,8 @@ func OpenHQStore(dir string, opts ...HQStoreOption) (*HQStore, error) {
 		ttlInterval:         cfg.ttlInterval,
 		closedTaskRetention: cfg.closedRetention,
 		snapshotInterval:    cfg.snapshotInterval,
+		snapshotOnWrite:     cfg.snapshotOnWrite,
+		locker:              cfg.locker,
 	}
 	store.resetCoreLocked()
 
@@ -167,6 +195,14 @@ func OpenHQStore(dir string, opts ...HQStoreOption) (*HQStore, error) {
 	store.startSnapshotter()
 	store.startTTLSweeper()
 	return store, nil
+}
+
+// StoreHealthPath returns the on-disk directory that contains HQStore state.
+func (s *HQStore) StoreHealthPath() string {
+	if s == nil {
+		return ""
+	}
+	return s.dir
 }
 
 // Counters returns the live HQStore entry counters for test and diagnostic

@@ -223,28 +223,145 @@ func TestHQStorePeriodicSnapshotFlushes(t *testing.T) {
 	}
 }
 
-func makeHQSnapshotDirReadOnly(t *testing.T, dir string) func() {
-	t.Helper()
-	info, err := os.Stat(dir)
+func TestHQStoreSnapshotOnWritePersistsWithoutShutdown(t *testing.T) {
+	dir := t.TempDir()
+	store, err := beads.OpenHQStore(dir,
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+	)
 	if err != nil {
-		t.Fatalf("stat snapshot dir: %v", err)
+		t.Fatalf("OpenHQStore: %v", err)
 	}
-	originalMode := info.Mode().Perm()
-	restored := false
-	restore := func() {
-		if restored {
-			return
+	created, err := store.Create(beads.Bead{Title: "short lived command"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	recovered, err := beads.OpenHQStore(dir, beads.WithHQStoreSnapshotInterval(0))
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := recovered.Shutdown(); err != nil {
+			t.Errorf("Shutdown recovered: %v", err)
 		}
-		restored = true
-		if err := os.Chmod(dir, originalMode); err != nil {
-			t.Fatalf("restore snapshot dir permissions: %v", err)
+	})
+	got, err := recovered.Get(created.ID)
+	if err != nil {
+		t.Fatalf("Get(%q): %v", created.ID, err)
+	}
+	if got.Title != "short lived command" {
+		t.Fatalf("Title = %q, want short lived command", got.Title)
+	}
+}
+
+func TestHQStoreSnapshotOnWriteReloadsBeforeCreate(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "snapshot.lock")
+	first, err := beads.OpenHQStore(dir,
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+		beads.WithHQStoreLocker(beads.NewFileFlock(lockPath)),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore first: %v", err)
+	}
+	second, err := beads.OpenHQStore(dir,
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+		beads.WithHQStoreLocker(beads.NewFileFlock(lockPath)),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore second: %v", err)
+	}
+
+	a, err := first.Create(beads.Bead{Title: "first"})
+	if err != nil {
+		t.Fatalf("first Create: %v", err)
+	}
+	b, err := second.Create(beads.Bead{Title: "second"})
+	if err != nil {
+		t.Fatalf("second Create: %v", err)
+	}
+	if a.ID == b.ID {
+		t.Fatalf("two stores created duplicate ID %q", a.ID)
+	}
+	if b.ID != "hq-2" {
+		t.Fatalf("second ID = %q, want hq-2 after reloading first write", b.ID)
+	}
+}
+
+func TestHQStoreSnapshotOnWriteRefreshesReads(t *testing.T) {
+	dir := t.TempDir()
+	lockPath := filepath.Join(dir, "snapshot.lock")
+	writer, err := beads.OpenHQStore(dir,
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+		beads.WithHQStoreLocker(beads.NewFileFlock(lockPath)),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore writer: %v", err)
+	}
+	reader, err := beads.OpenHQStore(dir,
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+		beads.WithHQStoreLocker(beads.NewFileFlock(lockPath)),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore reader: %v", err)
+	}
+
+	created, err := writer.Create(beads.Bead{Title: "visible to reader"})
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	got, err := reader.Get(created.ID)
+	if err != nil {
+		t.Fatalf("reader Get(%q): %v", created.ID, err)
+	}
+	if got.Title != "visible to reader" {
+		t.Fatalf("Title = %q, want visible to reader", got.Title)
+	}
+}
+
+func TestHQStoreSnapshotOnWritePersistsPurgeExpired(t *testing.T) {
+	dir := t.TempDir()
+	store, err := beads.OpenHQStore(dir,
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreSnapshotOnWrite(true),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore: %v", err)
+	}
+	expired, err := store.Create(beads.Bead{
+		Title:     "expired",
+		Type:      "order-tracking",
+		Ephemeral: true,
+		Metadata: map[string]string{
+			"expires_at": time.Now().Add(-time.Second).Format(time.RFC3339Nano),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Create expired: %v", err)
+	}
+	if purged, err := store.PurgeExpired(); err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	} else if purged != 1 {
+		t.Fatalf("PurgeExpired purged %d, want 1", purged)
+	}
+
+	recovered, err := beads.OpenHQStore(dir, beads.WithHQStoreSnapshotInterval(0))
+	if err != nil {
+		t.Fatalf("reopen: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := recovered.Shutdown(); err != nil {
+			t.Errorf("Shutdown recovered: %v", err)
 		}
+	})
+	if _, err := recovered.Get(expired.ID); !errors.Is(err, beads.ErrNotFound) {
+		t.Fatalf("Get expired error = %v, want ErrNotFound", err)
 	}
-	if err := os.Chmod(dir, 0o555); err != nil {
-		t.Fatalf("make snapshot dir read-only: %v", err)
-	}
-	t.Cleanup(restore)
-	return restore
 }
 
 func TestHQStorePurgeExpired(t *testing.T) {
