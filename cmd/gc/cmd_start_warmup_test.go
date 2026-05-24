@@ -145,6 +145,57 @@ func runWarmupTest(t *testing.T, checks []doctor.Check, opts WarmupOpts) (*Warmu
 	return report, mailer, stderr.String()
 }
 
+func warmupTestNow() time.Time {
+	return time.Date(2026, 5, 24, 4, 0, 0, 0, time.UTC)
+}
+
+func warmupTestStatePath(t *testing.T) string {
+	t.Helper()
+	return filepath.Join(t.TempDir(), ".gc", "runtime", "warmup-last.json")
+}
+
+func warmupFailure(check string, status doctor.CheckStatus) WarmupCheckResult {
+	return WarmupCheckResult{
+		Scope:   "city",
+		Check:   check,
+		Status:  status,
+		Message: "bad",
+	}
+}
+
+func failingWarmupCheck(name string) doctor.Check {
+	return stubWarmupCheck{
+		name:            name,
+		warmup:          true,
+		returnedStatus:  doctor.StatusError,
+		returnedMessage: "bad",
+	}
+}
+
+func mustWriteWarmupState(t *testing.T, path string, state *WarmupSuppressionState) []byte {
+	t.Helper()
+	if err := writeWarmupState(path, state); err != nil {
+		t.Fatalf("writeWarmupState: %v", err)
+	}
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read state bytes: %v", err)
+	}
+	return data
+}
+
+func mustReadWarmupState(t *testing.T, path string) *WarmupSuppressionState {
+	t.Helper()
+	state, err := readWarmupState(path)
+	if err != nil {
+		t.Fatalf("readWarmupState: %v", err)
+	}
+	if state == nil {
+		t.Fatalf("state at %s is nil", path)
+	}
+	return state
+}
+
 func TestRunWarmupChecks_ParallelExecution(t *testing.T) {
 	checks := []doctor.Check{
 		stubWarmupCheck{name: "a", warmup: true, runDelay: 200 * time.Millisecond},
@@ -456,6 +507,467 @@ func TestRunWarmupChecks_CustomMailTo(t *testing.T) {
 	}
 	if !strings.Contains(stderr, "see mail to ops") {
 		t.Fatalf("stderr = %q, want \"see mail to ops\"", stderr)
+	}
+}
+
+func TestWarmupSuppression_NewFailureSet_SendsMail(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	checks := []doctor.Check{failingWarmupCheck("core-pg:auth")}
+
+	report, mailer, stderr := runWarmupTest(t, checks, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent mail count = %d, want 1", len(mailer.sent))
+	}
+	if !report.MailSent {
+		t.Fatal("MailSent = false, want true")
+	}
+	if report.SuppressedFromMayor {
+		t.Fatal("SuppressedFromMayor = true, want false")
+	}
+	if report.SuppressionReason != "" {
+		t.Fatalf("SuppressionReason = %q, want empty", report.SuppressionReason)
+	}
+	state := mustReadWarmupState(t, path)
+	if state.FailureSetHash != report.FailureSetHash {
+		t.Fatalf("state hash = %q, want report hash %q", state.FailureSetHash, report.FailureSetHash)
+	}
+	if len(state.LastFailures) != len(report.Failures) {
+		t.Fatalf("LastFailures = %d, want %d", len(state.LastFailures), len(report.Failures))
+	}
+	if !strings.Contains(stderr, "gc start: warmup: 1 check(s) failed (Error)") {
+		t.Fatalf("stderr = %q, want failure summary", stderr)
+	}
+}
+
+func TestWarmupSuppression_DuplicateWithin24h_NoMail(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	failure := warmupFailure("core-pg:auth", doctor.StatusError)
+	hash := warmupFailureSetHash([]WarmupCheckResult{failure})
+	before := mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-23 * time.Hour),
+		FailureSetHash: hash,
+		LastSubject:    "core-pg:auth alert during city warm-up",
+		LastFailures: []SuppressedFailure{
+			{Scope: failure.Scope, Check: failure.Check, Severity: failure.Status},
+		},
+	})
+	infoBefore, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat state before: %v", err)
+	}
+
+	report, mailer, stderr := runWarmupTest(t, []doctor.Check{failingWarmupCheck("core-pg:auth")}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 0 {
+		t.Fatalf("sent mail count = %d, want 0", len(mailer.sent))
+	}
+	if report.MailSent {
+		t.Fatal("MailSent = true, want false")
+	}
+	if !report.SuppressedFromMayor {
+		t.Fatal("SuppressedFromMayor = false, want true")
+	}
+	if report.SuppressionReason != "duplicate-within-24h" {
+		t.Fatalf("SuppressionReason = %q, want duplicate-within-24h", report.SuppressionReason)
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read state after: %v", err)
+	}
+	infoAfter, err := os.Stat(path)
+	if err != nil {
+		t.Fatalf("stat state after: %v", err)
+	}
+	if string(after) != string(before) || !infoAfter.ModTime().Equal(infoBefore.ModTime()) {
+		t.Fatalf("state changed on duplicate suppression")
+	}
+	if !strings.Contains(stderr, "suppressed (last mail at 2026-05-23T05:00:00Z)") {
+		t.Fatalf("stderr = %q, want suppressed timestamp", stderr)
+	}
+}
+
+func TestWarmupSuppression_ExpiredAfter24h_SendsMail(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	failure := warmupFailure("core-pg:auth", doctor.StatusError)
+	hash := warmupFailureSetHash([]WarmupCheckResult{failure})
+	mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-25 * time.Hour),
+		FailureSetHash: hash,
+		LastFailures: []SuppressedFailure{
+			{Scope: failure.Scope, Check: failure.Check, Severity: failure.Status},
+		},
+	})
+
+	report, mailer, _ := runWarmupTest(t, []doctor.Check{failingWarmupCheck("core-pg:auth")}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent mail count = %d, want 1", len(mailer.sent))
+	}
+	if !report.MailSent || report.SuppressedFromMayor {
+		t.Fatalf("MailSent/SuppressedFromMayor = %v/%v, want true/false", report.MailSent, report.SuppressedFromMayor)
+	}
+	state := mustReadWarmupState(t, path)
+	if !state.LastEmissionAt.Equal(now) {
+		t.Fatalf("LastEmissionAt = %s, want %s", state.LastEmissionAt, now)
+	}
+}
+
+func TestWarmupSuppression_DifferentHashWithin24h_SendsMail(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	previousFailure := warmupFailure("core-pg:auth", doctor.StatusWarning)
+	mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-1 * time.Hour),
+		FailureSetHash: warmupFailureSetHash([]WarmupCheckResult{previousFailure}),
+		LastFailures: []SuppressedFailure{
+			{Scope: previousFailure.Scope, Check: previousFailure.Check, Severity: previousFailure.Status},
+		},
+	})
+
+	report, mailer, _ := runWarmupTest(t, []doctor.Check{failingWarmupCheck("core-pg:auth")}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent mail count = %d, want 1", len(mailer.sent))
+	}
+	state := mustReadWarmupState(t, path)
+	if state.FailureSetHash != report.FailureSetHash {
+		t.Fatalf("state hash = %q, want %q", state.FailureSetHash, report.FailureSetHash)
+	}
+}
+
+func TestWarmupAllClear_SendsRecoveryMail(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-time.Hour),
+		FailureSetHash: "old",
+		LastFailures: []SuppressedFailure{
+			{Scope: "city", Check: "core-pg:auth", Severity: doctor.StatusError},
+		},
+	})
+
+	report, mailer, stderr := runWarmupTest(t, []doctor.Check{
+		stubWarmupCheck{name: "core-pg:auth", warmup: true, returnedStatus: doctor.StatusOK},
+	}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent mail count = %d, want 1", len(mailer.sent))
+	}
+	if got, want := mailer.sent[0].Subject, "core-pg:auth warm-up alert cleared"; got != want {
+		t.Fatalf("subject = %q, want %q", got, want)
+	}
+	if !strings.Contains(mailer.sent[0].Body, "✓ city — core-pg:auth is now passing during city warm-up.") {
+		t.Fatalf("body = %q, want all-clear line", mailer.sent[0].Body)
+	}
+	if report.HighestSeverity != doctor.StatusOK {
+		t.Fatalf("HighestSeverity = %v, want StatusOK", report.HighestSeverity)
+	}
+	state := mustReadWarmupState(t, path)
+	if len(state.LastFailures) != 0 {
+		t.Fatalf("LastFailures = %+v, want empty", state.LastFailures)
+	}
+	if !strings.Contains(stderr, "gc start: warmup: 1 alert(s) cleared") {
+		t.Fatalf("stderr = %q, want all-clear line", stderr)
+	}
+}
+
+func TestWarmupAllClear_MultiDrop_OneMail(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-time.Hour),
+		FailureSetHash: "old",
+		LastFailures: []SuppressedFailure{
+			{Scope: "city", Check: "b", Severity: doctor.StatusWarning},
+			{Scope: "city", Check: "a", Severity: doctor.StatusError},
+		},
+	})
+
+	_, mailer, _ := runWarmupTest(t, []doctor.Check{
+		stubWarmupCheck{name: "a", warmup: true, returnedStatus: doctor.StatusOK},
+		stubWarmupCheck{name: "b", warmup: true, returnedStatus: doctor.StatusOK},
+	}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent mail count = %d, want 1", len(mailer.sent))
+	}
+	if got, want := mailer.sent[0].Subject, "city warm-up: 2 alert(s) cleared"; got != want {
+		t.Fatalf("subject = %q, want %q", got, want)
+	}
+	first := strings.Index(mailer.sent[0].Body, "city — a")
+	second := strings.Index(mailer.sent[0].Body, "city — b")
+	if first < 0 || second < 0 || first > second {
+		t.Fatalf("body = %q, want sorted a then b", mailer.sent[0].Body)
+	}
+}
+
+func TestWarmupAllClear_BypassesSuppressionWindow(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-5 * time.Minute),
+		FailureSetHash: "old",
+		LastFailures: []SuppressedFailure{
+			{Scope: "city", Check: "core-pg:auth", Severity: doctor.StatusError},
+		},
+	})
+
+	_, mailer, _ := runWarmupTest(t, []doctor.Check{
+		stubWarmupCheck{name: "core-pg:auth", warmup: true, returnedStatus: doctor.StatusOK},
+	}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 1 {
+		t.Fatalf("sent mail count = %d, want 1", len(mailer.sent))
+	}
+}
+
+func TestWarmupAllClear_PartialRecovery_BothMails(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-25 * time.Hour),
+		FailureSetHash: "old",
+		LastFailures: []SuppressedFailure{
+			{Scope: "city", Check: "still-bad", Severity: doctor.StatusError},
+			{Scope: "city", Check: "recovered", Severity: doctor.StatusWarning},
+		},
+	})
+
+	report, mailer, _ := runWarmupTest(t, []doctor.Check{
+		failingWarmupCheck("still-bad"),
+		stubWarmupCheck{name: "recovered", warmup: true, returnedStatus: doctor.StatusOK},
+	}, WarmupOpts{
+		StatePath: path,
+		Now:       func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 2 {
+		t.Fatalf("sent mail count = %d, want 2", len(mailer.sent))
+	}
+	if got, want := mailer.sent[0].Subject, "still-bad alert during city warm-up"; got != want {
+		t.Fatalf("first subject = %q, want %q", got, want)
+	}
+	if got, want := mailer.sent[1].Subject, "recovered warm-up alert cleared"; got != want {
+		t.Fatalf("second subject = %q, want %q", got, want)
+	}
+	state := mustReadWarmupState(t, path)
+	if state.FailureSetHash != report.FailureSetHash {
+		t.Fatalf("state hash = %q, want %q", state.FailureSetHash, report.FailureSetHash)
+	}
+	if len(state.LastFailures) != 1 || state.LastFailures[0].Check != "still-bad" {
+		t.Fatalf("LastFailures = %+v, want still-bad only", state.LastFailures)
+	}
+}
+
+func TestWarmupNoAlertsFlag_SkipsMailAndState(t *testing.T) {
+	path := warmupTestStatePath(t)
+
+	report, mailer, stderr := runWarmupTest(t, []doctor.Check{failingWarmupCheck("core-pg:auth")}, WarmupOpts{
+		StatePath:      path,
+		NoAlerts:       true,
+		NoAlertsReason: "no-warmup-alerts-flag",
+		Now:            warmupTestNow,
+	})
+
+	if len(mailer.sent) != 0 {
+		t.Fatalf("sent mail count = %d, want 0", len(mailer.sent))
+	}
+	if report.MailSent {
+		t.Fatal("MailSent = true, want false")
+	}
+	if !report.SuppressedFromMayor {
+		t.Fatal("SuppressedFromMayor = false, want true")
+	}
+	if report.SuppressionReason != "no-warmup-alerts-flag" {
+		t.Fatalf("SuppressionReason = %q, want no-warmup-alerts-flag", report.SuppressionReason)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("state file err = %v, want not exist", err)
+	}
+	if !strings.Contains(stderr, "gc start: warmup: 1 check(s) failed (Error); alerts disabled") {
+		t.Fatalf("stderr = %q, want alerts disabled", stderr)
+	}
+}
+
+func TestWarmupNoAlertsFlag_AllClearAlsoSuppressed(t *testing.T) {
+	path := warmupTestStatePath(t)
+	now := warmupTestNow()
+	before := mustWriteWarmupState(t, path, &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: now.Add(-time.Hour),
+		FailureSetHash: "old",
+		LastFailures: []SuppressedFailure{
+			{Scope: "city", Check: "core-pg:auth", Severity: doctor.StatusError},
+		},
+	})
+
+	_, mailer, stderr := runWarmupTest(t, []doctor.Check{
+		stubWarmupCheck{name: "core-pg:auth", warmup: true, returnedStatus: doctor.StatusOK},
+	}, WarmupOpts{
+		StatePath:      path,
+		NoAlerts:       true,
+		NoAlertsReason: "no-warmup-alerts-flag",
+		Now:            func() time.Time { return now },
+	})
+
+	if len(mailer.sent) != 0 {
+		t.Fatalf("sent mail count = %d, want 0", len(mailer.sent))
+	}
+	after, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read state after: %v", err)
+	}
+	if string(after) != string(before) {
+		t.Fatalf("state changed with NoAlerts")
+	}
+	if !strings.Contains(stderr, "gc start: warmup: 1 alert(s) cleared") {
+		t.Fatalf("stderr = %q, want all-clear count", stderr)
+	}
+}
+
+func TestWarmupConfigOptOut_PersistentSkip(t *testing.T) {
+	disabled := false
+	cfg := &config.City{Startup: config.StartupConfig{WarmupAlerts: &disabled}}
+	noAlerts, reason := resolveNoAlerts(cfg, false)
+	if !noAlerts || reason != "warmup-alerts-disabled-in-config" {
+		t.Fatalf("resolveNoAlerts = %v, %q; want true, warmup-alerts-disabled-in-config", noAlerts, reason)
+	}
+	path := warmupTestStatePath(t)
+
+	report, mailer, _ := runWarmupTest(t, []doctor.Check{failingWarmupCheck("core-pg:auth")}, WarmupOpts{
+		StatePath:      path,
+		NoAlerts:       noAlerts,
+		NoAlertsReason: reason,
+		Now:            warmupTestNow,
+	})
+
+	if len(mailer.sent) != 0 {
+		t.Fatalf("sent mail count = %d, want 0", len(mailer.sent))
+	}
+	if report.SuppressionReason != "warmup-alerts-disabled-in-config" {
+		t.Fatalf("SuppressionReason = %q, want warmup-alerts-disabled-in-config", report.SuppressionReason)
+	}
+}
+
+func TestWarmupCLIFlagOverridesConfig(t *testing.T) {
+	trueValue := true
+	falseValue := false
+	cases := []struct {
+		name       string
+		cfg        *config.City
+		cliFlag    bool
+		wantNo     bool
+		wantReason string
+	}{
+		{
+			name:       "cli_wins",
+			cfg:        &config.City{Startup: config.StartupConfig{WarmupAlerts: &trueValue}},
+			cliFlag:    true,
+			wantNo:     true,
+			wantReason: "no-warmup-alerts-flag",
+		},
+		{
+			name:       "config_only",
+			cfg:        &config.City{Startup: config.StartupConfig{WarmupAlerts: &falseValue}},
+			wantNo:     true,
+			wantReason: "warmup-alerts-disabled-in-config",
+		},
+		{
+			name: "both_absent",
+		},
+		{
+			name:    "explicit_true",
+			cfg:     &config.City{Startup: config.StartupConfig{WarmupAlerts: &trueValue}},
+			wantNo:  false,
+			cliFlag: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			gotNo, gotReason := resolveNoAlerts(tc.cfg, tc.cliFlag)
+			if gotNo != tc.wantNo || gotReason != tc.wantReason {
+				t.Fatalf("resolveNoAlerts = %v, %q; want %v, %q", gotNo, gotReason, tc.wantNo, tc.wantReason)
+			}
+		})
+	}
+}
+
+func TestComputeDroppedPairs(t *testing.T) {
+	prev := []SuppressedFailure{
+		{Scope: "city", Check: "c", Severity: doctor.StatusWarning},
+		{Scope: "city", Check: "b", Severity: doctor.StatusError},
+		{Scope: "city", Check: "a", Severity: doctor.StatusError},
+	}
+	cases := []struct {
+		name string
+		now  []WarmupCheckResult
+		want []string
+	}{
+		{
+			name: "no_drops",
+			now: []WarmupCheckResult{
+				warmupFailure("a", doctor.StatusError),
+				warmupFailure("b", doctor.StatusError),
+				warmupFailure("c", doctor.StatusWarning),
+			},
+		},
+		{
+			name: "all_drops",
+			want: []string{"city/a", "city/b", "city/c"},
+		},
+		{
+			name: "partial_drops",
+			now:  []WarmupCheckResult{warmupFailure("a", doctor.StatusError)},
+			want: []string{"city/b", "city/c"},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := computeDroppedPairs(prev, tc.now)
+			if len(got) != len(tc.want) {
+				t.Fatalf("drops = %+v, want %v", got, tc.want)
+			}
+			for i, drop := range got {
+				key := drop.Scope + "/" + drop.Check
+				if key != tc.want[i] {
+					t.Fatalf("drop[%d] = %s, want %s", i, key, tc.want[i])
+				}
+			}
+		})
 	}
 }
 

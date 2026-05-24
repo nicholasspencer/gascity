@@ -26,6 +26,7 @@ City is the top-level configuration for a Gas City instance.
 | `dolt` | DoltConfig |  |  | Dolt configures optional dolt server connection overrides. |
 | `formulas` | FormulasConfig |  |  | Formulas configures formula directory settings. |
 | `daemon` | DaemonConfig |  |  | Daemon configures controller daemon settings. |
+| `startup` | StartupConfig |  |  | Startup configures one-shot startup invocation behavior. |
 | `orders` | OrdersConfig |  |  | Orders configures order settings (skip list). |
 | `api` | APIConfig |  |  | API configures the optional HTTP API server. |
 | `chat_sessions` | ChatSessionsConfig |  |  | ChatSessions configures chat session behavior (auto-suspend). |
@@ -646,6 +647,14 @@ SessionSleepConfig configures default idle sleep policies by session class.
 | `interactive_resume` | string |  |  | InteractiveResume applies to attachable sessions using wake_mode=resume. Accepts a duration string or "off". |
 | `interactive_fresh` | string |  |  | InteractiveFresh applies to attachable sessions using wake_mode=fresh. Accepts a duration string or "off". |
 | `noninteractive` | string |  |  | NonInteractive applies to sessions with attach=false. Accepts a duration string or "off". |
+
+## StartupConfig
+
+StartupConfig configures behavior during `gc start` invocations.
+
+| Field | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `warmup_alerts` | boolean |  |  | WarmupAlerts controls whether `gc start` sends warm-up alert mail. Nil means alerts are enabled; explicit false disables mail dispatch. |
 
 ## Tier
 

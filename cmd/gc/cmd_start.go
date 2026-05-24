@@ -167,6 +167,9 @@ var strictMode bool
 // noStrictMode disables strict config checking (opt-out).
 var noStrictMode bool
 
+// noWarmupAlerts disables warm-up alert mail during one start invocation.
+var noWarmupAlerts bool
+
 // dryRunMode previews what agents would start without actually starting them.
 var dryRunMode bool
 
@@ -394,6 +397,8 @@ Use "gc supervisor run" for foreground operation.`,
 		"disable strict config collision checking (strict is on by default)")
 	cmd.Flags().MarkHidden("file")      //nolint:errcheck // flag always exists
 	cmd.Flags().MarkHidden("no-strict") //nolint:errcheck // flag always exists
+	cmd.Flags().BoolVar(&noWarmupAlerts, "no-warmup-alerts", false,
+		"skip mail-to-mayor when warm-up doctor checks fail (still writes stderr summary)")
 	cmd.Flags().BoolVarP(&dryRunMode, "dry-run", "n", false,
 		"preview what agents would start without starting them")
 	cmd.Flags().BoolVar(&noAutoRestartMode, "no-auto-restart", false,
@@ -695,9 +700,12 @@ func doStartStandalone(args []string, controllerMode bool, stdout, stderr io.Wri
 
 	// Warm-up doctor scan. Fail-open: startup continues regardless of check,
 	// mail, or runner failures.
+	noAlerts, noAlertsReason := resolveNoAlerts(cfg, noWarmupAlerts)
 	warmupOpts := WarmupOpts{
-		Mailer: defaultMailProvider(cityPath),
-		Stderr: stderr,
+		Mailer:         defaultMailProvider(cityPath),
+		Stderr:         stderr,
+		NoAlerts:       noAlerts,
+		NoAlertsReason: noAlertsReason,
 	}
 	_, _ = RunWarmupChecks(context.Background(), cityPath, cfg, warmupOpts)
 
@@ -922,6 +930,16 @@ func doStartStandalone(args []string, controllerMode bool, stdout, stderr io.Wri
 
 	fmt.Fprintln(stdout, "City started.") //nolint:errcheck // best-effort stdout
 	return 0
+}
+
+func resolveNoAlerts(cfg *config.City, cliFlag bool) (noAlerts bool, reason string) {
+	if cliFlag {
+		return true, "no-warmup-alerts-flag"
+	}
+	if cfg != nil && cfg.Startup.WarmupAlerts != nil && !*cfg.Startup.WarmupAlerts {
+		return true, "warmup-alerts-disabled-in-config"
+	}
+	return false, ""
 }
 
 func loadStartCityConfig(cityPath string) (*config.City, *config.Provenance, error) {

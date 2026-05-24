@@ -3174,6 +3174,7 @@ gc start
 | `-n`, `--dry-run` | bool |  | preview what agents would start without starting them |
 | `--json` | bool |  | emit JSONL summary |
 | `--no-auto-restart` | bool |  | detect supervisor binary drift but do not auto-restart; exits non-zero on drift |
+| `--no-warmup-alerts` | bool |  | skip mail-to-mayor when warm-up doctor checks fail (still writes stderr summary) |
 | `--verbose` | bool |  | disable warning deduplication and print every supervisor warning |
 
 ## gc status

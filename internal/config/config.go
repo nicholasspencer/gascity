@@ -199,6 +199,8 @@ type City struct {
 	Formulas FormulasConfig `toml:"formulas,omitempty"`
 	// Daemon configures controller daemon settings.
 	Daemon DaemonConfig `toml:"daemon,omitempty"`
+	// Startup configures one-shot startup invocation behavior.
+	Startup StartupConfig `toml:"startup,omitempty"`
 	// Orders configures order settings (skip list).
 	Orders OrdersConfig `toml:"orders,omitempty"`
 	// API configures the optional HTTP API server.
@@ -1686,6 +1688,13 @@ func (c ConvergenceConfig) MaxTotalOrDefault() int {
 		return 10
 	}
 	return c.MaxTotal
+}
+
+// StartupConfig configures behavior during `gc start` invocations.
+type StartupConfig struct {
+	// WarmupAlerts controls whether `gc start` sends warm-up alert mail.
+	// Nil means alerts are enabled; explicit false disables mail dispatch.
+	WarmupAlerts *bool `toml:"warmup_alerts,omitempty"`
 }
 
 // DaemonConfig holds controller daemon settings.

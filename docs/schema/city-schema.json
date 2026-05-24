@@ -1020,6 +1020,10 @@
           "$ref": "#/$defs/DaemonConfig",
           "description": "Daemon configures controller daemon settings."
         },
+        "startup": {
+          "$ref": "#/$defs/StartupConfig",
+          "description": "Startup configures one-shot startup invocation behavior."
+        },
         "orders": {
           "$ref": "#/$defs/OrdersConfig",
           "description": "Orders configures order settings (skip list)."
@@ -2244,6 +2248,17 @@
       "additionalProperties": false,
       "type": "object",
       "description": "SessionSleepConfig configures default idle sleep policies by session class."
+    },
+    "StartupConfig": {
+      "properties": {
+        "warmup_alerts": {
+          "type": "boolean",
+          "description": "WarmupAlerts controls whether `gc start` sends warm-up alert mail.\nNil means alerts are enabled; explicit false disables mail dispatch."
+        }
+      },
+      "additionalProperties": false,
+      "type": "object",
+      "description": "StartupConfig configures behavior during `gc start` invocations."
     },
     "Tier": {
       "properties": {

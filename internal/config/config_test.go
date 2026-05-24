@@ -306,6 +306,62 @@ name = "bare-city"
 	}
 }
 
+func TestStartupWarmupAlertsParses(t *testing.T) {
+	cases := []struct {
+		name       string
+		toml       string
+		wantPtrNil bool
+		wantValue  bool
+	}{
+		{
+			name: "omitted",
+			toml: `[workspace]
+name = "test"`,
+			wantPtrNil: true,
+		},
+		{
+			name: "explicit_true",
+			toml: `[workspace]
+name = "test"
+
+[startup]
+warmup_alerts = true`,
+			wantValue: true,
+		},
+		{
+			name: "explicit_false",
+			toml: `[workspace]
+name = "test"
+
+[startup]
+warmup_alerts = false`,
+			wantValue: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg, err := Parse([]byte(tc.toml))
+			if err != nil {
+				t.Fatalf("Parse: %v", err)
+			}
+			got := cfg.Startup.WarmupAlerts
+			if tc.wantPtrNil {
+				if got != nil {
+					t.Fatalf("WarmupAlerts = %v, want nil", *got)
+				}
+				return
+			}
+			if got == nil {
+				t.Fatal("WarmupAlerts = nil, want value")
+			}
+			if *got != tc.wantValue {
+				t.Fatalf("WarmupAlerts = %v, want %v", *got, tc.wantValue)
+			}
+		})
+	}
+}
+
 func TestParseEmptyFile(t *testing.T) {
 	data := []byte("# just a comment\n")
 	cfg, err := Parse(data)

@@ -26,6 +26,9 @@ const (
 	// DefaultWarmupTotalDeadline is the default maximum runtime for the whole
 	// warm-up doctor scan.
 	DefaultWarmupTotalDeadline = 30 * time.Second
+	// WarmupSuppressionWindow is the duration during which a duplicate
+	// failure set suppresses re-emission of the mayor mail (FR-08).
+	WarmupSuppressionWindow = 24 * time.Hour
 )
 
 const (
@@ -68,6 +71,7 @@ type WarmupReport struct {
 	MailSendError       error
 	SuppressedFromMayor bool
 	SuppressionReason   string
+	lastEmissionAt      time.Time
 }
 
 // WarmupOpts configures RunWarmupChecks.
@@ -79,6 +83,9 @@ type WarmupOpts struct {
 	TotalDeadline    time.Duration
 	MailFrom         string
 	MailTo           string
+	NoAlerts         bool
+	NoAlertsReason   string
+	StatePath        string
 	checksOverride   []doctor.Check
 }
 
@@ -159,19 +166,65 @@ func RunWarmupChecks(ctx context.Context, cityPath string, cfg *config.City, opt
 	report.FailureSetHash = warmupFailureSetHash(report.Failures)
 	report.CompletedAt = settings.Now()
 
+	statePath := settings.StatePath
+	if statePath == "" {
+		statePath = defaultWarmupStatePath(cityPath)
+	}
+	prevState, stateReadErr := readWarmupState(statePath)
+	if stateReadErr != nil {
+		fmt.Fprintf(settings.Stderr, "gc start: warmup: state read error: %v\n", stateReadErr) //nolint:errcheck // best-effort stderr
+	}
+	var dropped []SuppressedFailure
+	if prevState != nil {
+		report.lastEmissionAt = prevState.LastEmissionAt
+		dropped = computeDroppedPairs(prevState.LastFailures, report.Failures)
+	}
+
+	if settings.NoAlerts {
+		if len(report.Failures) > 0 {
+			report.SuppressedFromMayor = true
+			report.SuppressionReason = settings.NoAlertsReason
+			if report.SuppressionReason == "" {
+				report.SuppressionReason = "no-warmup-alerts-flag"
+			}
+			writeWarmupStderr(settings.Stderr, settings.MailTo, report)
+		}
+		writeWarmupAllClearStderr(settings.Stderr, len(dropped))
+		return report, nil
+	}
+
+	if prevState != nil && len(report.Failures) > 0 && prevState.FailureSetHash == report.FailureSetHash && settings.Now().Sub(prevState.LastEmissionAt) < WarmupSuppressionWindow {
+		report.SuppressedFromMayor = true
+		report.SuppressionReason = "duplicate-within-24h"
+		writeWarmupStderr(settings.Stderr, settings.MailTo, report)
+		return report, nil
+	}
+
+	failureSubject := ""
 	if len(report.Failures) == 0 {
+		allClearSent := writeWarmupAllClear(settings, report, dropped)
+		if len(dropped) == 0 || allClearSent {
+			writeCurrentWarmupState(settings.Stderr, statePath, report, failureSubject)
+		}
 		return report, nil
 	}
 	subject := warmupMailSubject(report.Failures)
+	failureSubject = subject
 	body := warmupMailBody(report)
+	failureMailSent := false
 	if settings.Mailer == nil {
 		report.MailSendError = errors.New(warmupMissingMailerError)
 	} else if _, sendErr := settings.Mailer.Send(settings.MailFrom, settings.MailTo, subject, body); sendErr != nil {
 		report.MailSendError = sendErr
 	} else {
 		report.MailSent = true
+		failureMailSent = true
 	}
 	writeWarmupStderr(settings.Stderr, settings.MailTo, report)
+	writeWarmupAllClear(settings, report, dropped)
+	if failureMailSent {
+		writeCurrentWarmupState(settings.Stderr, statePath, report, failureSubject)
+	}
 	return report, nil
 }
 
@@ -342,6 +395,22 @@ func warmupFailures(results []WarmupCheckResult) []WarmupCheckResult {
 	return failures
 }
 
+func computeDroppedPairs(prev []SuppressedFailure, now []WarmupCheckResult) []SuppressedFailure {
+	current := make(map[string]struct{}, len(now))
+	for _, result := range now {
+		current[result.Scope+"\x00"+result.Check] = struct{}{}
+	}
+	var dropped []SuppressedFailure
+	for _, failure := range prev {
+		if _, ok := current[failure.Scope+"\x00"+failure.Check]; ok {
+			continue
+		}
+		dropped = append(dropped, failure)
+	}
+	sortSuppressedFailures(dropped)
+	return dropped
+}
+
 func sortWarmupFailures(failures []WarmupCheckResult) {
 	sort.Slice(failures, func(i, j int) bool {
 		if failures[i].Scope != failures[j].Scope {
@@ -402,6 +471,69 @@ func warmupMailBody(report *WarmupReport) string {
 	return truncateWarmupMailBody(b.String())
 }
 
+func sendAllClearMail(opts WarmupOpts, dropped []SuppressedFailure) error {
+	if opts.NoAlerts || len(dropped) == 0 {
+		return nil
+	}
+	if opts.Mailer == nil {
+		return errors.New(warmupMissingMailerError)
+	}
+	subject := ""
+	if len(dropped) == 1 {
+		subject = dropped[0].Check + " warm-up alert cleared"
+	} else {
+		subject = fmt.Sprintf("city warm-up: %d alert(s) cleared", len(dropped))
+	}
+	var b strings.Builder
+	for _, drop := range dropped {
+		fmt.Fprintf(&b, "✓ %s — %s is now passing during city warm-up.\n", drop.Scope, drop.Check)
+	}
+	b.WriteString("\n— see `gc doctor` for full details.\n")
+	_, err := opts.Mailer.Send(opts.MailFrom, opts.MailTo, subject, truncateWarmupMailBody(b.String()))
+	return err
+}
+
+func writeWarmupAllClear(settings WarmupOpts, report *WarmupReport, dropped []SuppressedFailure) bool {
+	if len(dropped) == 0 {
+		return false
+	}
+	if err := sendAllClearMail(settings, dropped); err != nil {
+		report.MailSendError = err
+		fmt.Fprintf(settings.Stderr, "gc start: warmup: mail send error: %v\n", err) //nolint:errcheck // best-effort stderr
+		writeWarmupAllClearStderr(settings.Stderr, len(dropped))
+		return false
+	}
+	report.MailSent = true
+	writeWarmupAllClearStderr(settings.Stderr, len(dropped))
+	return true
+}
+
+func writeCurrentWarmupState(stderr io.Writer, statePath string, report *WarmupReport, lastSubject string) {
+	state := &WarmupSuppressionState{
+		Version:        1,
+		LastEmissionAt: report.CompletedAt,
+		FailureSetHash: report.FailureSetHash,
+		LastSubject:    lastSubject,
+		LastFailures:   suppressedFailuresFromReport(report.Failures),
+	}
+	if err := writeWarmupState(statePath, state); err != nil {
+		fmt.Fprintf(stderr, "gc start: warmup: state write error: %v\n", err) //nolint:errcheck // best-effort stderr
+	}
+}
+
+func suppressedFailuresFromReport(failures []WarmupCheckResult) []SuppressedFailure {
+	suppressed := make([]SuppressedFailure, 0, len(failures))
+	for _, failure := range failures {
+		suppressed = append(suppressed, SuppressedFailure{
+			Scope:    failure.Scope,
+			Check:    failure.Check,
+			Severity: failure.Status,
+		})
+	}
+	sortSuppressedFailures(suppressed)
+	return suppressed
+}
+
 func truncateWarmupMailBody(body string) string {
 	if len(body) <= warmupMailBodyLimit {
 		return body
@@ -433,11 +565,26 @@ func writeWarmupStderr(stderr io.Writer, mailTo string, report *WarmupReport) {
 	if len(report.Failures) == 0 {
 		return
 	}
+	if report.SuppressedFromMayor {
+		if report.SuppressionReason == "duplicate-within-24h" {
+			fmt.Fprintf(stderr, "gc start: warmup: %d check(s) failed (%s); suppressed (last mail at %s)\n", len(report.Failures), warmupStatusString(report.HighestSeverity), report.lastEmissionAt.UTC().Format(time.RFC3339)) //nolint:errcheck // best-effort stderr
+			return
+		}
+		fmt.Fprintf(stderr, "gc start: warmup: %d check(s) failed (%s); alerts disabled\n", len(report.Failures), warmupStatusString(report.HighestSeverity)) //nolint:errcheck // best-effort stderr
+		return
+	}
 	if report.MailSendError != nil {
 		fmt.Fprintf(stderr, "gc start: warmup: %d check(s) failed (%s); mail send error: %v\n", len(report.Failures), warmupStatusString(report.HighestSeverity), report.MailSendError) //nolint:errcheck // best-effort stderr
 		return
 	}
 	fmt.Fprintf(stderr, "gc start: warmup: %d check(s) failed (%s); see mail to %s and `gc doctor` for details\n", len(report.Failures), warmupStatusString(report.HighestSeverity), mailTo) //nolint:errcheck // best-effort stderr
+}
+
+func writeWarmupAllClearStderr(stderr io.Writer, dropped int) {
+	if dropped == 0 {
+		return
+	}
+	fmt.Fprintf(stderr, "gc start: warmup: %d alert(s) cleared\n", dropped) //nolint:errcheck // best-effort stderr
 }
 
 func warmupStatusString(status doctor.CheckStatus) string {
