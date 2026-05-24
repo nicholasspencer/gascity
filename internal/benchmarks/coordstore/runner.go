@@ -149,6 +149,24 @@ progressLoop:
 	return sc, nil
 }
 
+// HistogramSnapshot returns a deep copy of the operation histograms collected
+// so far.
+func (r *Runner) HistogramSnapshot() map[string]*OperationResult {
+	r.resultsMu.Lock()
+	defer r.resultsMu.Unlock()
+
+	out := make(map[string]*OperationResult, len(r.results))
+	for name, res := range r.results {
+		if res == nil {
+			continue
+		}
+		cp := *res
+		cp.H = res.H.clone()
+		out[name] = &cp
+	}
+	return out
+}
+
 // opTag identifies which operation a goroutine will execute.
 type opTag int
 

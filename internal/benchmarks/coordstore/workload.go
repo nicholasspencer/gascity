@@ -1,6 +1,7 @@
 package coordstore
 
 import (
+	"math"
 	"time"
 )
 
@@ -83,6 +84,75 @@ type WorkloadConfig struct {
 	// Concurrency is the number of concurrent goroutines issuing requests.
 	// Matches the number of concurrent agents in a typical HQ city (~20).
 	Concurrency int
+}
+
+// SoakPhase identifies a long-running soak benchmark phase.
+type SoakPhase string
+
+const (
+	// SoakPhaseA is the in-process Phase A soak harness.
+	SoakPhaseA SoakPhase = "phase-a"
+)
+
+// SoakConfig configures an in-process coordination-store soak run.
+type SoakConfig struct {
+	// SoakPhase selects the result path phase segment.
+	SoakPhase SoakPhase
+	// SoakDuration overrides the workload duration when non-zero.
+	SoakDuration time.Duration
+	// KillCadence is reserved for later chaos phases; Phase A does not kill
+	// processes.
+	KillCadence time.Duration
+	// SampleInterval controls time-series telemetry sampling.
+	SampleInterval time.Duration
+	// ResultsDir is the root directory for soak artifacts.
+	ResultsDir string
+	// DataDir is the backend storage directory measured for store-size
+	// telemetry. It is optional because some callers only need workload scaling.
+	DataDir string
+	// ScaleFactor scales workload populations and rates. 1.0 = today's
+	// single-city scale (v1 default); ~10x for future 100-rig calibration run
+	// (empirical, not hard-coded).
+	ScaleFactor float64
+}
+
+// ScaledWorkload returns a copy of base scaled by ScaleFactor.
+func (c SoakConfig) ScaledWorkload(base WorkloadConfig) WorkloadConfig {
+	scale := c.ScaleFactor
+	if scale <= 0 {
+		scale = 1
+	}
+	wl := base
+	wl.MainOpenCount = scaleCount(base.MainOpenCount, scale)
+	wl.MainClosedCount = scaleCount(base.MainClosedCount, scale)
+	wl.WispOpenCount = scaleCount(base.WispOpenCount, scale)
+	wl.DepEdgeCount = scaleCount(base.DepEdgeCount, scale)
+	wl.MailPollRate = base.MailPollRate * scale
+	wl.PointReadRate = base.PointReadRate * scale
+	wl.FilterScanRate = base.FilterScanRate * scale
+	wl.CreateRate = base.CreateRate * scale
+	wl.UpdateRate = base.UpdateRate * scale
+	wl.SetMetadataRate = base.SetMetadataRate * scale
+	wl.BatchGetRate = base.BatchGetRate * scale
+	wl.ReadyRate = base.ReadyRate * scale
+	wl.DepOpRate = base.DepOpRate * scale
+	wl.RecentScanRate = base.RecentScanRate * scale
+	wl.Concurrency = scaleCount(base.Concurrency, scale)
+	if c.SoakDuration > 0 {
+		wl.Duration = c.SoakDuration
+	}
+	return wl
+}
+
+func scaleCount(n int, scale float64) int {
+	if n <= 0 {
+		return 0
+	}
+	scaled := int(math.Round(float64(n) * scale))
+	if scaled < 1 {
+		return 1
+	}
+	return scaled
 }
 
 // MailAssignees is the set of assignees used in mail-poll simulation.

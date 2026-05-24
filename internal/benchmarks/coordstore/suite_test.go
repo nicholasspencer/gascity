@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 
@@ -98,6 +100,24 @@ func TestBenchmarkSuiteStress(t *testing.T) {
 	runSuite(t, coordstore.StressWorkload, true)
 }
 
+// TestBenchmarkSoakPhaseA runs the long in-process Phase A soak harness.
+func TestBenchmarkSoakPhaseA(t *testing.T) {
+	if os.Getenv("COORDSTORE_SOAK") == "" {
+		t.Skip("set COORDSTORE_SOAK=1 to run the Phase A soak harness")
+	}
+	cfg := soakConfigFromEnv(t, 4*time.Hour, 1.0)
+	runSoakSuite(t, cfg)
+}
+
+// TestBenchmarkSoakCalibrate runs the shorter calibration soak pass.
+func TestBenchmarkSoakCalibrate(t *testing.T) {
+	if os.Getenv("COORDSTORE_SOAK") == "" || os.Getenv("COORDSTORE_SOAK_CALIBRATE") == "" {
+		t.Skip("set COORDSTORE_SOAK=1 and COORDSTORE_SOAK_CALIBRATE=1 to run calibration")
+	}
+	cfg := soakConfigFromEnv(t, 30*time.Minute, 1.0)
+	runSoakSuite(t, cfg)
+}
+
 func runSuite(t *testing.T, wl coordstore.WorkloadConfig, enforceTargets bool) {
 	t.Helper()
 	ctx := context.Background()
@@ -181,6 +201,82 @@ func runSuite(t *testing.T, wl coordstore.WorkloadConfig, enforceTargets bool) {
 	// Summary across all backends.
 	if len(scorecards) > 1 {
 		printComparison(t, scorecards)
+	}
+}
+
+func runSoakSuite(t *testing.T, cfg coordstore.SoakConfig) {
+	t.Helper()
+	ctx := context.Background()
+	workload := coordstore.RealWorldWorkload
+
+	for _, af := range registeredAdapters {
+		af := af
+		t.Run(af.name, func(t *testing.T) {
+			dir := t.TempDir()
+			dataDir := filepath.Join(dir, "store")
+			if err := os.MkdirAll(dataDir, 0o755); err != nil {
+				t.Fatalf("mkdir store: %v", err)
+			}
+			adapter := af.newFn()
+			if err := adapter.Open(ctx, coordstore.Config{DataDir: dataDir}); err != nil {
+				t.Fatalf("Open: %v", err)
+			}
+			defer adapter.Close() //nolint:errcheck
+
+			failures := coordstore.CorrectnessChecker(ctx, adapter)
+			for _, f := range failures {
+				t.Errorf("  FAIL correctness: %s", f)
+			}
+			if len(failures) > 0 {
+				t.Fatalf("  %d correctness failures — skipping soak", len(failures))
+			}
+			soakCfg := cfg
+			soakCfg.DataDir = dataDir
+			result, err := coordstore.NewSoakRunner(af.name, adapter, workload, soakCfg).Run(ctx, testWriter{t})
+			if err != nil {
+				t.Fatalf("SoakRunner: %v", err)
+			}
+			t.Logf("soak artifacts: %s", result.ResultsDir)
+		})
+	}
+}
+
+func soakConfigFromEnv(t *testing.T, defaultDuration time.Duration, defaultScale float64) coordstore.SoakConfig {
+	t.Helper()
+	resultsDir := os.Getenv("COORDSTORE_RESULTS_DIR")
+	if resultsDir == "" {
+		resultsDir = "/var/tmp/coordstore-soak"
+	}
+	duration := defaultDuration
+	if raw := os.Getenv("COORDSTORE_SOAK_DURATION"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			t.Fatalf("invalid COORDSTORE_SOAK_DURATION %q: %v", raw, err)
+		}
+		duration = parsed
+	}
+	sampleInterval := 10 * time.Second
+	if raw := os.Getenv("COORDSTORE_SOAK_SAMPLE_INTERVAL"); raw != "" {
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			t.Fatalf("invalid COORDSTORE_SOAK_SAMPLE_INTERVAL %q: %v", raw, err)
+		}
+		sampleInterval = parsed
+	}
+	scale := defaultScale
+	if raw := os.Getenv("COORDSTORE_SOAK_SCALE"); raw != "" {
+		parsed, err := strconv.ParseFloat(raw, 64)
+		if err != nil || parsed <= 0 {
+			t.Fatalf("invalid COORDSTORE_SOAK_SCALE %q: %v", raw, err)
+		}
+		scale = parsed
+	}
+	return coordstore.SoakConfig{
+		SoakPhase:      coordstore.SoakPhaseA,
+		SoakDuration:   duration,
+		SampleInterval: sampleInterval,
+		ResultsDir:     resultsDir,
+		ScaleFactor:    scale,
 	}
 }
 

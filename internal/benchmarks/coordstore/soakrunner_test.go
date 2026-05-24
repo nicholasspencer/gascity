@@ -18,7 +18,11 @@ func TestSoakRunnerWritesPhaseAArtifacts(t *testing.T) {
 	ctx := context.Background()
 	dir := t.TempDir()
 	adapter := boltdb.New()
-	if err := adapter.Open(ctx, coordstore.Config{DataDir: filepath.Join(dir, "store")}); err != nil {
+	dataDir := filepath.Join(dir, "store")
+	if err := os.MkdirAll(dataDir, 0o755); err != nil {
+		t.Fatalf("mkdir store: %v", err)
+	}
+	if err := adapter.Open(ctx, coordstore.Config{DataDir: dataDir}); err != nil {
 		t.Fatalf("Open: %v", err)
 	}
 	defer adapter.Close() //nolint:errcheck
@@ -28,6 +32,7 @@ func TestSoakRunnerWritesPhaseAArtifacts(t *testing.T) {
 		SoakDuration:   150 * time.Millisecond,
 		SampleInterval: 25 * time.Millisecond,
 		ResultsDir:     filepath.Join(dir, "results"),
+		DataDir:        dataDir,
 		ScaleFactor:    1.0,
 	}
 	workload := coordstore.WorkloadConfig{
