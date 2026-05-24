@@ -11,6 +11,7 @@
 import { execFileSync } from "node:child_process";
 import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent";
 
+const GC_OMP_HOOK_VERSION = 1;
 const PATH_PREFIX =
   `/opt/homebrew/bin:/usr/local/bin:${process.env.HOME}/go/bin:${process.env.HOME}/.local/bin:`;
 
@@ -26,8 +27,26 @@ function run(args: string[], cwd?: string, extraEnv: Record<string, string> = {}
         PATH: PATH_PREFIX + (process.env.PATH || ""),
       },
     }).trim();
-  } catch {
+  } catch (err) {
+    logRunFailure(args, cwd, err);
     return "";
+  }
+}
+
+function logRunFailure(args: string[], cwd: string | undefined, err: unknown): void {
+  try {
+    const maybeError = err as { code?: string; signal?: string; message?: string } | undefined;
+    const detail = maybeError?.code || maybeError?.signal || maybeError?.message || "unknown error";
+    console.error(
+      "gc-hooks run:",
+      `gc ${args.join(" ")}`,
+      "cwd",
+      cwd || process.cwd(),
+      "failed:",
+      detail,
+    );
+  } catch {
+    // Keep OMP hooks non-fatal even if stderr is unavailable.
   }
 }
 

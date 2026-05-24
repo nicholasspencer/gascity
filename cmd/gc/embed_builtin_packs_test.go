@@ -501,11 +501,14 @@ func TestMaterializeBuiltinPacksOmpHookPublishesProviderSessionID(t *testing.T) 
 	data := readMaterializedOmpHook(t, dir)
 	for _, want := range []string{
 		`import type { ExtensionAPI } from "@oh-my-pi/pi-coding-agent"`,
+		`const GC_OMP_HOOK_VERSION = 1`,
 		`export default function gascityOmpExtension(pi: ExtensionAPI)`,
 		`pi.on("session_start"`,
 		`pi.on("session_compact"`,
+		`pi.on("before_agent_start"`,
 		`GC_PROVIDER_SESSION_ID`,
 		`getSessionId`,
+		`logRunFailure`,
 	} {
 		if !strings.Contains(data, want) {
 			t.Errorf("materialized OMP hook missing provider-session marker %q:\n%s", want, data)
