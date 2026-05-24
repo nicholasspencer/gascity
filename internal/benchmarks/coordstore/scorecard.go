@@ -84,14 +84,26 @@ var DiscoveryTargets = []Target{
 const HeapInusePeakTarget = 256 * 1024 * 1024
 
 // MemReport captures memory consumption observed during a workload run.
-// HeapInusePeak and RSSPeak are sampled peaks; AllocDelta is the cumulative
-// bytes allocated over the run (TotalAlloc end − start), a churn proxy.
+// Baseline is measured after seeding and before workload execution; peak is
+// sampled during the run; steady is measured after the workload stops.
+// AllocDelta is the cumulative bytes allocated over the run
+// (TotalAlloc end − start), a churn proxy.
 type MemReport struct {
+	// HeapInuseBaseline is runtime.MemStats.HeapInuse before the workload.
+	HeapInuseBaseline uint64
 	// HeapInusePeak is the maximum runtime.MemStats.HeapInuse seen, in bytes.
 	HeapInusePeak uint64
+	// HeapInuseSteady is runtime.MemStats.HeapInuse after the workload.
+	HeapInuseSteady uint64
+	// RSSBaseline is the process resident set size before the workload, in
+	// bytes. Zero if unavailable.
+	RSSBaseline uint64
 	// RSSPeak is the maximum process resident set size seen, in bytes,
 	// sampled from /proc/self/status (VmRSS). Zero if unavailable.
 	RSSPeak uint64
+	// RSSSteady is the process resident set size after the workload, in bytes.
+	// Zero if unavailable.
+	RSSSteady uint64
 	// AllocDelta is the total bytes allocated during the run
 	// (runtime.MemStats.TotalAlloc end − start).
 	AllocDelta uint64
@@ -277,13 +289,28 @@ func (s *Scorecard) PrintTable(w io.Writer) {
 			memResult = fmt.Sprintf("FAIL  ← HeapInuse peak %s > target %s",
 				FormatBytes(s.Mem.HeapInusePeak), FormatBytes(HeapInusePeakTarget))
 		}
-		fmt.Fprintf(w, "  %-*s  %-12s  %s\n", //nolint:errcheck
-			colW, "HeapInuse peak (≤256MB)", FormatBytes(s.Mem.HeapInusePeak), memResult)
-		rss := "-"
+		fmt.Fprintf(w, "  %-*s  %-12s  %-12s  %-12s  %s\n", //nolint:errcheck
+			colW, "Metric", "Baseline", "Peak", "Steady", "Result")
+		fmt.Fprintf(w, "  %-*s  %-12s  %-12s  %-12s  %s\n", //nolint:errcheck
+			colW, "HeapInuse (≤256MB peak)",
+			FormatBytes(s.Mem.HeapInuseBaseline),
+			FormatBytes(s.Mem.HeapInusePeak),
+			FormatBytes(s.Mem.HeapInuseSteady),
+			memResult)
+		rssBaseline := "-"
 		if s.Mem.RSSPeak > 0 {
-			rss = FormatBytes(s.Mem.RSSPeak)
+			rssBaseline = FormatBytes(s.Mem.RSSBaseline)
 		}
-		fmt.Fprintf(w, "  %-*s  %-12s\n", colW, "RSS peak", rss)                                      //nolint:errcheck
+		rssPeak := "-"
+		if s.Mem.RSSPeak > 0 {
+			rssPeak = FormatBytes(s.Mem.RSSPeak)
+		}
+		rssSteady := "-"
+		if s.Mem.RSSSteady > 0 {
+			rssSteady = FormatBytes(s.Mem.RSSSteady)
+		}
+		fmt.Fprintf(w, "  %-*s  %-12s  %-12s  %-12s\n", //nolint:errcheck
+			colW, "RSS", rssBaseline, rssPeak, rssSteady)
 		fmt.Fprintf(w, "  %-*s  %-12s\n", colW, "alloc delta (churn)", FormatBytes(s.Mem.AllocDelta)) //nolint:errcheck
 	}
 

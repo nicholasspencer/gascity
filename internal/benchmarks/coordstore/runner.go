@@ -421,7 +421,7 @@ func opName(op opTag) string {
 }
 
 // memSampler periodically samples process memory during a workload run and
-// tracks the peak HeapInuse and RSS plus the total bytes allocated.
+// tracks baseline, peak, and steady HeapInuse/RSS plus total bytes allocated.
 type memSampler struct {
 	interval time.Duration
 	stopCh   chan struct{}
@@ -449,12 +449,18 @@ func (m *memSampler) start() {
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
 	m.startTotalAlloc = ms.TotalAlloc
+	m.report.HeapInuseBaseline = ms.HeapInuse
+	m.report.HeapInusePeak = ms.HeapInuse
+	if rss, ok := readRSSBytes(); ok {
+		m.report.RSSBaseline = rss
+		m.report.RSSPeak = rss
+	}
+	m.report.Sampled = true
 
 	go func() {
 		defer close(m.doneCh)
 		ticker := time.NewTicker(m.interval)
 		defer ticker.Stop()
-		m.sampleOnce()
 		for {
 			select {
 			case <-ticker.C:
@@ -490,6 +496,16 @@ func (m *memSampler) stop() MemReport {
 	m.sampleOnce()
 	var ms runtime.MemStats
 	runtime.ReadMemStats(&ms)
+	m.report.HeapInuseSteady = ms.HeapInuse
+	if ms.HeapInuse > m.report.HeapInusePeak {
+		m.report.HeapInusePeak = ms.HeapInuse
+	}
+	if rss, ok := readRSSBytes(); ok {
+		m.report.RSSSteady = rss
+		if rss > m.report.RSSPeak {
+			m.report.RSSPeak = rss
+		}
+	}
 	if ms.TotalAlloc >= m.startTotalAlloc {
 		m.report.AllocDelta = ms.TotalAlloc - m.startTotalAlloc
 	}

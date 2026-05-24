@@ -15,8 +15,6 @@ type hqTierIndex struct {
 	assignee map[string]hqIDSet
 	typ      map[string]hqIDSet
 	parent   map[string]hqIDSet
-	label    map[string]hqIDSet
-	metadata map[string]hqIDSet
 }
 
 func newHQTierIndex() hqTierIndex {
@@ -25,8 +23,6 @@ func newHQTierIndex() hqTierIndex {
 		assignee: make(map[string]hqIDSet),
 		typ:      make(map[string]hqIDSet),
 		parent:   make(map[string]hqIDSet),
-		label:    make(map[string]hqIDSet),
-		metadata: make(map[string]hqIDSet),
 	}
 }
 
@@ -710,12 +706,6 @@ func (i hqTierIndex) add(b Bead) {
 	addHQIndex(i.assignee, b.Assignee, b.ID)
 	addHQIndex(i.typ, b.Type, b.ID)
 	addHQIndex(i.parent, b.ParentID, b.ID)
-	for _, label := range b.Labels {
-		addHQIndex(i.label, label, b.ID)
-	}
-	for k, v := range b.Metadata {
-		addHQIndex(i.metadata, hqMetadataIndexKey(k, v), b.ID)
-	}
 }
 
 func (i hqTierIndex) remove(b Bead) {
@@ -723,12 +713,6 @@ func (i hqTierIndex) remove(b Bead) {
 	removeHQIndex(i.assignee, b.Assignee, b.ID)
 	removeHQIndex(i.typ, b.Type, b.ID)
 	removeHQIndex(i.parent, b.ParentID, b.ID)
-	for _, label := range b.Labels {
-		removeHQIndex(i.label, label, b.ID)
-	}
-	for k, v := range b.Metadata {
-		removeHQIndex(i.metadata, hqMetadataIndexKey(k, v), b.ID)
-	}
 }
 
 func (i hqTierIndex) candidateIDs(q ListQuery) hqIDSet {
@@ -746,12 +730,6 @@ func (i hqTierIndex) candidateIDs(q ListQuery) hqIDSet {
 	}
 	if q.ParentID != "" {
 		candidates = append(candidates, i.parent[q.ParentID])
-	}
-	if q.Label != "" {
-		candidates = append(candidates, i.label[q.Label])
-	}
-	for k, v := range q.Metadata {
-		candidates = append(candidates, i.metadata[hqMetadataIndexKey(k, v)])
 	}
 	if len(candidates) == 0 {
 		return i.allIDs()
@@ -830,10 +808,6 @@ func unionHQIDSets(a, b hqIDSet) hqIDSet {
 		out[id] = struct{}{}
 	}
 	return out
-}
-
-func hqMetadataIndexKey(k, v string) string {
-	return k + "\x00" + v
 }
 
 func numericIDSuffix(id string) int {
