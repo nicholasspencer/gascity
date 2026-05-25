@@ -637,6 +637,98 @@ func TestPolecatPromptDoneSequenceSignalsRefinery(t *testing.T) {
 	}
 }
 
+// TestPolecatPromptHaltsOnAutoPushFalse asserts the done sequence respects
+// mol-pr-from-issue's auto_push=false halt-at-branch-ready contract. The
+// gate must run BEFORE `git push origin HEAD` so a false signal prevents
+// the push and refinery handoff entirely. Regression for gco-ded / gc-m3j:
+// prompt's done sequence was structurally overriding the formula's
+// auto_push gate (BYPASS rate hit 75%).
+func TestPolecatPromptHaltsOnAutoPushFalse(t *testing.T) {
+	dir := exampleDir()
+	path := filepath.Join(dir, "packs", "gastown", "agents", "polecat", "prompt.template.md")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading polecat prompt: %v", err)
+	}
+	body := string(data)
+
+	assertContainsInOrder(t, body,
+		"## FINAL REMINDER: RUN THE DONE SEQUENCE",
+		`AUTO_PUSH=$(gc bd show <work-bead> --json | jq -r '.[0].metadata | if has("auto_push") then (.auto_push | tostring) else "" end')`,
+		`if [ "$AUTO_PUSH" = "false" ]; then`,
+		`BRANCH=$(git branch --show-current)`,
+		`gc bd update <work-bead> \`,
+		`--status=open --assignee=""`,
+		`--set-metadata branch="$BRANCH"`,
+		`--set-metadata target={{ .DefaultBranch }}`,
+		`--set-metadata branch_ready=true`,
+		`--set-metadata halt_reason=auto_push_false`,
+		`--set-metadata gc.routed_to=""`,
+		`gc runtime drain-ack`,
+		"exit 0",
+		"fi",
+		"git push origin HEAD",
+	)
+}
+
+func TestPolecatRenderedApprovalFallacyHaltsOnAutoPushFalse(t *testing.T) {
+	body := renderGastownPromptForPack(t,
+		"packs/gastown/agents/polecat/prompt.template.md",
+		"polecat",
+		"polecat",
+		"gascity",
+		"gastown",
+		"gastown.",
+	)
+	doneSequence := sectionBetween(t, body, "### The Done Sequence", "This pushes your branch")
+
+	assertContainsInOrder(t, doneSequence,
+		`AUTO_PUSH=$(gc bd show <work-bead> --json | jq -r '.[0].metadata | if has("auto_push") then (.auto_push | tostring) else "" end')`,
+		`if [ "$AUTO_PUSH" = "false" ]; then`,
+		`BRANCH=$(git branch --show-current)`,
+		`gc bd update <work-bead> \`,
+		`--status=open --assignee=""`,
+		`--set-metadata branch="$BRANCH"`,
+		`--set-metadata target=main`,
+		`--set-metadata branch_ready=true`,
+		`--set-metadata halt_reason=auto_push_false`,
+		`--set-metadata gc.routed_to=""`,
+		`gc runtime drain-ack`,
+		"exit 0",
+		"fi",
+		"git push origin HEAD",
+	)
+}
+
+func TestPolecatFormulaHaltsOnAutoPushFalse(t *testing.T) {
+	dir := exampleDir()
+	path := filepath.Join(dir, "packs", "gastown", "formulas", "mol-polecat-work.toml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("reading polecat formula: %v", err)
+	}
+	body := string(data)
+	submit := sectionBetween(t, body, `id = "submit-and-exit"`, "The refinery will pick this up")
+
+	assertContainsInOrder(t, submit,
+		"**2. Push your branch:**",
+		`AUTO_PUSH=$(gc bd show {{issue}} --json | jq -r '.[0].metadata | if has("auto_push") then (.auto_push | tostring) else "" end')`,
+		`if [ "$AUTO_PUSH" = "false" ]; then`,
+		`BRANCH=$(git branch --show-current)`,
+		`gc bd update {{issue}} \`,
+		`--status=open --assignee=""`,
+		`--set-metadata branch="$BRANCH"`,
+		`--set-metadata target={{base_branch}}`,
+		`--set-metadata branch_ready=true`,
+		`--set-metadata halt_reason=auto_push_false`,
+		`--set-metadata gc.routed_to=""`,
+		`gc runtime drain-ack`,
+		"exit 0",
+		"fi",
+		"git push origin HEAD",
+	)
+}
+
 func TestRefineryFormulaRespectsExistingPRMetadata(t *testing.T) {
 	dir := exampleDir()
 	path := filepath.Join(dir, "packs", "gastown", "formulas", "mol-refinery-patrol.toml")

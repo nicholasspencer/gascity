@@ -224,6 +224,24 @@ Nudges from other agents may arrive via your hook. When working:
 **Before your session ends, you MUST run the done sequence.**
 
 ```bash
+# Explicit opt-out gate: respect mol-pr-from-issue auto_push=false (halt-at-branch-ready).
+# mol-pr-from-issue writes metadata.auto_push on the work bead. Other formulas
+# (mol-polecat-work) leave it unset — those flow through unchanged.
+AUTO_PUSH=$(gc bd show <work-bead> --json | jq -r '.[0].metadata | if has("auto_push") then (.auto_push | tostring) else "" end')
+if [ "$AUTO_PUSH" = "false" ]; then
+  echo "auto_push=false: halting at branch-ready (no push, no refinery handoff)"
+  BRANCH=$(git branch --show-current)
+  gc bd update <work-bead> \
+    --status=open --assignee="" \
+    --set-metadata branch="$BRANCH" \
+    --set-metadata target={{ .DefaultBranch }} \
+    --set-metadata branch_ready=true \
+    --set-metadata halt_reason=auto_push_false \
+    --set-metadata gc.routed_to="" \
+    --notes "Branch ready: auto_push=false (no push, no refinery handoff)"
+  gc runtime drain-ack
+  exit 0
+fi
 git push origin HEAD
 gc bd update <work-bead> \
   --set-metadata branch=$(git branch --show-current) \
