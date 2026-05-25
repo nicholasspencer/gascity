@@ -76,6 +76,32 @@ type WorkloadConfig struct {
 	// Live HQ: used for inbox-replay / archive; ~0.02/s.
 	RecentScanRate float64
 
+	// --- Lifecycle / steady-state (ga-w08fz) ---
+	// A real coordination store reaches STEADY STATE: creates are balanced by
+	// completions and deletions, so the working set PLATEAUS rather than growing
+	// forever. Without these, a soak benchmarks each backend's COMPRESSION of an
+	// ever-growing dataset, not its steady-state behavior. The lifecycle ops are
+	// target-aware: they trim the open pools back to the seeded *Count sizes, so
+	// the plateau holds regardless of exact rate calibration (the rates only need
+	// to keep pace with creation, which these defaults do).
+
+	// CompleteRate is the rate of main-tier task completions (FR-1): an open
+	// record above the MainOpenCount target is closed (Update status=closed) and
+	// enters the closed-retention pool; when that pool exceeds MainClosedCount the
+	// excess is deleted. Balances main-tier creates. Set ≈ main-tier CreateRate
+	// (≈ half of CreateRate, since Create alternates main/wisp).
+	CompleteRate float64
+
+	// ArchiveRate is the rate of ephemeral (mail/order) completions: an open wisp
+	// above the WispOpenCount target is closed then deleted (eager archive-delete,
+	// mirroring production mail-wisp retirement). Balances wisp creates. Set ≈
+	// wisp-tier CreateRate (≈ half of CreateRate).
+	ArchiveRate float64
+
+	// PurgeRate is the rate of explicit TTL sweeps (PurgeExpired, FR-12): removes
+	// expired order-tracking wisps. Exercises the backend's bulk-expiry path.
+	PurgeRate float64
+
 	// --- Run parameters ---
 
 	// Duration is how long the workload driver runs.
@@ -141,6 +167,9 @@ func (c SoakConfig) ScaledWorkload(base WorkloadConfig) WorkloadConfig {
 	wl.ReadyRate = base.ReadyRate * scale
 	wl.DepOpRate = base.DepOpRate * scale
 	wl.RecentScanRate = base.RecentScanRate * scale
+	wl.CompleteRate = base.CompleteRate * scale
+	wl.ArchiveRate = base.ArchiveRate * scale
+	wl.PurgeRate = base.PurgeRate * scale
 	wl.Concurrency = scaleCount(base.Concurrency, scale)
 	if c.SoakDuration > 0 {
 		wl.Duration = c.SoakDuration
@@ -194,6 +223,12 @@ var RealWorldWorkload = WorkloadConfig{
 	DepOpRate:       0.1,   // dep add/remove (S4 W5 approx.)
 	RecentScanRate:  0.02,  // inbox-replay (S3 R11 proxy)
 
+	// Lifecycle: balance the ~1.5/s create rate (≈0.75/s main + 0.75/s wisp)
+	// so the working set plateaus at the seeded sizes (ga-w08fz).
+	CompleteRate: 0.75, // main task completions (close + retention purge)
+	ArchiveRate:  0.75, // mail/order wisp completions (close + delete)
+	PurgeRate:    0.1,  // periodic TTL sweep of expired order-tracking wisps
+
 	Duration:    30 * time.Second,
 	Concurrency: 20,
 }
@@ -220,6 +255,11 @@ var StressWorkload = WorkloadConfig{
 	DepOpRate:       0.5,
 	RecentScanRate:  0.1,
 
+	// Lifecycle: balance the 5/s create rate (≈2.5/s main + 2.5/s wisp).
+	CompleteRate: 2.5,
+	ArchiveRate:  2.5,
+	PurgeRate:    0.5,
+
 	Duration:    15 * time.Second,
 	Concurrency: 50,
 }
@@ -244,6 +284,11 @@ var SmokeWorkload = WorkloadConfig{
 	ReadyRate:       0.5,
 	DepOpRate:       0.1,
 	RecentScanRate:  0.1,
+
+	// Lifecycle: balance the 0.5/s create rate (≈0.25/s main + 0.25/s wisp).
+	CompleteRate: 0.25,
+	ArchiveRate:  0.25,
+	PurgeRate:    0.1,
 
 	Duration:    5 * time.Second,
 	Concurrency: 5,

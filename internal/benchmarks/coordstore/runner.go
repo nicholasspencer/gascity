@@ -181,6 +181,9 @@ const (
 	opReady
 	opDepOp
 	opRecentScan
+	opComplete
+	opArchive
+	opPurge
 )
 
 // buildSchedule creates a weighted list of operations proportional to their
@@ -204,6 +207,9 @@ func (r *Runner) buildSchedule() []opTag {
 		{opReady, wl.ReadyRate, len(r.seed.MainOpenIDs) > 0},
 		{opDepOp, wl.DepOpRate, len(r.seed.MainOpenIDs) >= 2},
 		{opRecentScan, wl.RecentScanRate, true},
+		{opComplete, wl.CompleteRate, len(r.seed.MainOpenIDs) > 0},
+		{opArchive, wl.ArchiveRate, len(r.seed.WispOpenIDs) > 0},
+		{opPurge, wl.PurgeRate, true},
 	}
 
 	var schedule []opTag
@@ -383,6 +389,71 @@ func (r *Runner) execOp(ctx context.Context, op opTag, rng *rand.Rand) error {
 		// FR-18: recent records by created_at DESC.
 		_, err := a.RecentScan(ctx, 50)
 		return r.recordOpErr("RecentScan", err)
+
+	case opComplete:
+		// Lifecycle: complete a main-tier task once the open pool exceeds its
+		// steady-state target. The record is closed (Update) and held in the
+		// retention pool; when that pool exceeds MainClosedCount the excess closed
+		// record is deleted, so total main records plateau (ga-w08fz). The ID is
+		// removed from the open pool under the lock so no other goroutine retires
+		// it, then the adapter is called without the lock held.
+		r.seedMu.Lock()
+		if len(seed.MainOpenIDs) <= r.wl.MainOpenCount {
+			r.seedMu.Unlock()
+			return nil // at/below steady state — nothing to trim
+		}
+		i := rng.IntN(len(seed.MainOpenIDs))
+		id := seed.MainOpenIDs[i]
+		seed.MainOpenIDs[i] = seed.MainOpenIDs[len(seed.MainOpenIDs)-1]
+		seed.MainOpenIDs = seed.MainOpenIDs[:len(seed.MainOpenIDs)-1]
+		seed.MainClosedIDs = append(seed.MainClosedIDs, id)
+		var toPurge string
+		if r.wl.MainClosedCount > 0 && len(seed.MainClosedIDs) > r.wl.MainClosedCount {
+			j := rng.IntN(len(seed.MainClosedIDs))
+			toPurge = seed.MainClosedIDs[j]
+			seed.MainClosedIDs[j] = seed.MainClosedIDs[len(seed.MainClosedIDs)-1]
+			seed.MainClosedIDs = seed.MainClosedIDs[:len(seed.MainClosedIDs)-1]
+		}
+		r.seedMu.Unlock()
+
+		if err := a.Update(ctx, id, Update{Status: "closed"}); err != nil && !IsNotFound(err) {
+			return err
+		}
+		if toPurge != "" {
+			if err := a.Delete(ctx, toPurge); err != nil && !IsNotFound(err) {
+				return err
+			}
+		}
+		return nil
+
+	case opArchive:
+		// Lifecycle: complete an ephemeral (mail/order) wisp once the open wisp
+		// pool exceeds its steady-state target — close then delete (eager
+		// archive-delete, mirroring production mail-wisp retirement). Plateaus the
+		// ephemeral working set (ga-w08fz).
+		r.seedMu.Lock()
+		if len(seed.WispOpenIDs) <= r.wl.WispOpenCount {
+			r.seedMu.Unlock()
+			return nil
+		}
+		i := rng.IntN(len(seed.WispOpenIDs))
+		id := seed.WispOpenIDs[i]
+		seed.WispOpenIDs[i] = seed.WispOpenIDs[len(seed.WispOpenIDs)-1]
+		seed.WispOpenIDs = seed.WispOpenIDs[:len(seed.WispOpenIDs)-1]
+		r.seedMu.Unlock()
+
+		if err := a.Update(ctx, id, Update{Status: "closed"}); err != nil && !IsNotFound(err) {
+			return err
+		}
+		if err := a.Delete(ctx, id); err != nil && !IsNotFound(err) {
+			return err
+		}
+		return nil
+
+	case opPurge:
+		// Lifecycle: explicit TTL sweep of expired order-tracking wisps (FR-12).
+		_, err := a.PurgeExpired(ctx)
+		return r.recordOpErr("PurgeExpired", err)
 	}
 	return nil
 }
@@ -434,6 +505,12 @@ func opName(op opTag) string {
 		return "DepAdd"
 	case opRecentScan:
 		return "RecentScan"
+	case opComplete:
+		return "Complete"
+	case opArchive:
+		return "Archive"
+	case opPurge:
+		return "PurgeExpired"
 	}
 	return "unknown"
 }
