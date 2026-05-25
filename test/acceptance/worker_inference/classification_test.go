@@ -873,8 +873,6 @@ mode = "always"
 	data, err := os.ReadFile(cityToml)
 	require.NoError(t, err)
 	text := string(data)
-	require.Contains(t, text, `[[agent]]
-name = "probe"`)
 	require.Contains(t, text, `[[named_session]]
 template = "probe"`)
 	require.Contains(t, text, "[orders]")
@@ -883,6 +881,38 @@ template = "probe"`)
 	for _, name := range inferenceDisabledOrders {
 		require.Contains(t, text, `"`+name+`"`)
 	}
+
+	agentText := readInferenceAgentTOML(t, cityDir, "probe")
+	require.Contains(t, agentText, `scope = "city"`)
+	require.Contains(t, agentText, `prompt_template = "prompts/worker-inference-probe.md"`)
+	require.Contains(t, agentText, `max_active_sessions = 1`)
+	require.NotContains(t, text, `[[agent]]
+name = "probe"`)
+}
+
+func TestInstallDefaultPoolInferenceAgentWritesV2AgentDir(t *testing.T) {
+	cityDir := t.TempDir()
+	cityToml := filepath.Join(cityDir, "city.toml")
+	require.NoError(t, os.WriteFile(cityToml, []byte(`
+[workspace]
+name = "worker-inference-test"
+provider = "claude"
+`), 0o644))
+
+	require.NoError(t, installDefaultPoolInferenceAgent(cityDir, "default-pool", "claude-default-pool-no-skills"))
+	require.NoError(t, installDefaultPoolInferenceAgent(cityDir, "default-pool", "claude-default-pool-no-skills"))
+
+	data, err := os.ReadFile(cityToml)
+	require.NoError(t, err)
+	require.NotContains(t, string(data), `[[agent]]`)
+
+	agentText := readInferenceAgentTOML(t, cityDir, "default-pool")
+	require.Contains(t, agentText, `scope = "city"`)
+	require.Contains(t, agentText, `provider = "claude-default-pool-no-skills"`)
+	require.Contains(t, agentText, `prompt_template = ".gc/system/packs/core/assets/prompts/pool-worker.md"`)
+	require.Contains(t, agentText, `default_sling_formula = "mol-do-work"`)
+	require.Contains(t, agentText, `min_active_sessions = 0`)
+	require.Contains(t, agentText, `max_active_sessions = 2`)
 }
 
 func TestInstallInferenceProbeAgentEnablesGeminiHooks(t *testing.T) {
@@ -934,9 +964,7 @@ prompt_template = "prompts/mayor.md"
 name = "worker-inference-test"
 provider = "opencode"
 install_agent_hooks = ["opencode"]`)
-	require.Contains(t, text, `[[agent]]
-name = "probe"
-session = "tmux"`)
+	require.Contains(t, readInferenceAgentTOML(t, cityDir, "probe"), `session = "tmux"`)
 	require.Equal(t, 1, strings.Count(text, `install_agent_hooks = ["opencode"]`))
 }
 
@@ -963,9 +991,7 @@ prompt_template = "prompts/mayor.md"
 name = "worker-inference-test"
 provider = "pi"
 install_agent_hooks = ["pi"]`)
-	require.Contains(t, text, `[[agent]]
-name = "probe"
-session = "tmux"`)
+	require.Contains(t, readInferenceAgentTOML(t, cityDir, "probe"), `session = "tmux"`)
 	require.Equal(t, 1, strings.Count(text, `install_agent_hooks = ["pi"]`))
 }
 
@@ -1106,14 +1132,20 @@ mode = "always"
 	require.Contains(t, text, `[providers.codex]`)
 	require.Contains(t, text, `command = "/tmp/provider-bin/codex"`)
 	require.Contains(t, text, `process_names = ["codex", "node"]`)
-	require.Contains(t, text, `[[agent]]
-name = "probe"`)
+	require.Contains(t, readInferenceAgentTOML(t, cityDir, "probe"), `max_active_sessions = 1`)
 	require.Contains(t, text, `[[named_session]]
 template = "probe"
 mode = "on_demand"`)
 	require.Contains(t, text, `[orders]`)
 	require.Contains(t, text, `[session]`)
 	require.Contains(t, text, `suspended = true`)
+}
+
+func readInferenceAgentTOML(t *testing.T, cityDir, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(cityDir, "agents", name, "agent.toml"))
+	require.NoError(t, err)
+	return string(data)
 }
 
 func TestEnrichLiveFailureEvidencePrefersSessionKeyTranscript(t *testing.T) {

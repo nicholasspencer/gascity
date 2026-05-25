@@ -12,6 +12,7 @@
 package tierb_test
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -120,11 +121,14 @@ func TestLifecycle_RigAgentGetsBeadsDir(t *testing.T) {
 	config := "[workspace]\nname = \"" + cityName + "\"\n" +
 		"\n[beads]\nprovider = \"file\"\n" +
 		"\n[[rigs]]\nname = \"myrig\"\npath = \"" + rigDir + "\"\n" +
-		"\n[[agent]]\nname = \"worker\"\ndir = \"myrig\"\n" +
-		"max_active_sessions = 1\n" +
-		"start_command = \"" + reportCmd + "\"\n" +
 		"\n[[named_session]]\ntemplate = \"worker\"\ndir = \"myrig\"\nmode = \"always\"\n"
 	c.WriteConfig(config)
+	c.WriteV2AgentDir("worker",
+		`scope = "rig"`,
+		`dir = "myrig"`,
+		"max_active_sessions = 1",
+		fmt.Sprintf("start_command = %q", reportCmd),
+	)
 
 	c.StartWithSupervisor()
 
@@ -155,6 +159,47 @@ func TestLifecycle_RigAgentGetsBeadsDir(t *testing.T) {
 	// GC_CITY_PATH must be the city root.
 	if env["GC_CITY_PATH"] != c.Dir {
 		t.Errorf("GC_CITY_PATH = %q, want %q", env["GC_CITY_PATH"], c.Dir)
+	}
+}
+
+func TestLifecycle_StartRejectsPackV1ConfigSurfaces(t *testing.T) {
+	c := helpers.NewCity(t, testEnvB)
+	c.Init("claude")
+
+	if out, err := c.GC("stop", c.Dir); err != nil {
+		t.Fatalf("gc stop after init failed: %v\n%s", err, out)
+	}
+	if out, err := c.GC("unregister", c.Dir); err != nil {
+		t.Fatalf("gc unregister after init failed: %v\n%s", err, out)
+	}
+
+	cityName := filepath.Base(c.Dir)
+	c.WriteConfig(fmt.Sprintf(`[workspace]
+name = %q
+includes = ["legacy-pack"]
+default_rig_includes = ["default-pack"]
+
+[beads]
+provider = "file"
+
+[[agent]]
+name = "worker"
+
+[packs.legacy]
+source = "legacy-pack"
+`, cityName))
+
+	out := c.StartExpectingFatal(t)
+	for _, want := range []string{
+		"PackV1 config surfaces are no longer supported",
+		"unsupported PackV1 [[agent]] tables",
+		"unsupported PackV1 [packs] entries",
+		"unsupported PackV1 workspace.includes",
+		"unsupported PackV1 workspace.default_rig_includes",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("gc start fatal output missing %q:\n%s", want, out)
+		}
 	}
 }
 

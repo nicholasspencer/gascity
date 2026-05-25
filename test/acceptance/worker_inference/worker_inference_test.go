@@ -1604,7 +1604,7 @@ func installDefaultPoolInferenceGitBaseline(cityDir string) error {
 		{"init"},
 		{"config", "user.name", "Gas City Test"},
 		{"config", "user.email", "gc-test@test.local"},
-		{"add", ".gitignore", "city.toml"},
+		{"add", ".gitignore", "city.toml", "agents"},
 		{"commit", "-m", "test: baseline default pool city"},
 	} {
 		cmd := exec.Command("git", append([]string{"-C", cityDir}, args...)...)
@@ -1621,30 +1621,15 @@ func installDefaultPoolInferenceAgent(cityDir, name, provider string) error {
 	if name == "" || provider == "" {
 		return fmt.Errorf("default pool inference agent requires name and provider")
 	}
-	cityPath := filepath.Join(cityDir, "city.toml")
-	data, err := os.ReadFile(cityPath)
-	if err != nil {
-		return err
-	}
-	if strings.Contains(string(data), "\nname = "+strconv.Quote(name)) {
-		return nil
-	}
-	var b strings.Builder
-	b.Write(data)
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		b.WriteByte('\n')
-	}
-	fmt.Fprintf(&b, `
-
-[[agent]]
-name = %q
-provider = %q
-prompt_template = %q
-default_sling_formula = "mol-do-work"
-min_active_sessions = 0
-max_active_sessions = 2
-`, name, provider, citylayout.SystemPacksRoot+"/core/assets/prompts/pool-worker.md")
-	return os.WriteFile(cityPath, []byte(b.String()), 0o644)
+	_, err := writeInferenceAgentTOML(cityDir, name, []string{
+		`scope = "city"`,
+		fmt.Sprintf("provider = %q", provider),
+		fmt.Sprintf("prompt_template = %q", citylayout.SystemPacksRoot+"/core/assets/prompts/pool-worker.md"),
+		`default_sling_formula = "mol-do-work"`,
+		"min_active_sessions = 0",
+		"max_active_sessions = 2",
+	})
+	return err
 }
 
 func setNamedSessionMode(cityDir, template, mode string) error {
@@ -3467,20 +3452,20 @@ When a later message asks you to recall prior turn context, use conversation mem
 	if err != nil {
 		return err
 	}
-	var additions []string
-	if !strings.Contains(string(data), "\nname = \""+inferenceProbeTemplate+"\"") {
-		sessionLine, err := inferenceProbeSessionLine(data)
-		if err != nil {
-			return err
-		}
-		additions = append(additions, fmt.Sprintf(`
-
-[[agent]]
-name = %q
-%sprompt_template = %q
-max_active_sessions = 1
-`, inferenceProbeTemplate, sessionLine, inferenceProbePromptPath))
+	sessionLine, err := inferenceProbeSessionLine(data)
+	if err != nil {
+		return err
 	}
+	if _, err := writeInferenceAgentTOML(cityDir, inferenceProbeTemplate, []string{
+		`scope = "city"`,
+		strings.TrimSpace(sessionLine),
+		fmt.Sprintf("prompt_template = %q", inferenceProbePromptPath),
+		"max_active_sessions = 1",
+	}); err != nil {
+		return err
+	}
+
+	var additions []string
 	if includeNamedSession && !strings.Contains(string(data), "\n[[named_session]]\ntemplate = \""+inferenceProbeTemplate+"\"") {
 		additions = append(additions, fmt.Sprintf(`
 
@@ -3507,6 +3492,42 @@ skip = [%s]
 		return nil
 	}
 	return os.WriteFile(cityPath, append(data, []byte(strings.Join(additions, ""))...), 0o644)
+}
+
+func writeInferenceAgentTOML(cityDir, name string, fields []string) (bool, error) {
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return false, fmt.Errorf("agent name is required")
+	}
+
+	agentDir := filepath.Join(cityDir, "agents", name)
+	if err := os.MkdirAll(agentDir, 0o755); err != nil {
+		return false, err
+	}
+
+	var b strings.Builder
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		b.WriteString(field)
+		b.WriteByte('\n')
+	}
+
+	path := filepath.Join(agentDir, "agent.toml")
+	next := []byte(b.String())
+	current, err := os.ReadFile(path)
+	if err == nil && string(current) == string(next) {
+		return false, nil
+	}
+	if err != nil && !os.IsNotExist(err) {
+		return false, err
+	}
+	if err := os.WriteFile(path, next, 0o644); err != nil {
+		return false, err
+	}
+	return true, nil
 }
 
 func inferenceProbeSessionLine(data []byte) (string, error) {

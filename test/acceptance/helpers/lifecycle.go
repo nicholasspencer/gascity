@@ -225,7 +225,7 @@ func parseEnvReport(s string) map[string]string {
 	return m
 }
 
-// WriteE2EConfig writes a full city.toml from structured config.
+// WriteE2EConfig writes city.toml plus v2 agents/<name>/agent.toml fixtures.
 // Includes [beads] provider = "file" for test isolation.
 func (c *City) WriteE2EConfig(agents []E2EAgent) {
 	c.t.Helper()
@@ -236,31 +236,6 @@ func (c *City) WriteE2EConfig(agents []E2EAgent) {
 	b.WriteString("\n[beads]\nprovider = \"file\"\n")
 
 	for _, a := range agents {
-		fmt.Fprintf(&b, "\n[[agent]]\nname = %q\n", a.Name)
-		if a.StartCommand != "" {
-			fmt.Fprintf(&b, "start_command = %q\n", a.StartCommand)
-		}
-		if a.Dir != "" {
-			fmt.Fprintf(&b, "dir = %q\n", a.Dir)
-		}
-		if a.WorkDir != "" {
-			fmt.Fprintf(&b, "work_dir = %q\n", a.WorkDir)
-		}
-		if a.WorkQuery != "" {
-			fmt.Fprintf(&b, "work_query = %q\n", a.WorkQuery)
-		}
-		if a.Suspended {
-			b.WriteString("suspended = true\n")
-		}
-		if a.Pool == nil {
-			fmt.Fprintf(&b, "max_active_sessions = 1\n")
-		}
-		if a.Pool != nil {
-			fmt.Fprintf(&b, "\n[agent.pool]\nmin = %d\nmax = %d\n", a.Pool.Min, a.Pool.Max)
-			if a.Pool.ScaleCheck != "" {
-				fmt.Fprintf(&b, "check = %q\n", a.Pool.ScaleCheck)
-			}
-		}
 		// Reserve a canonical named session so the lifecycle reconciler
 		// materializes and starts the agent. Without this, post-PR-666 the
 		// template is just config and never runs until work arrives. Drain-ack
@@ -277,6 +252,43 @@ func (c *City) WriteE2EConfig(agents []E2EAgent) {
 	}
 
 	c.WriteConfig(b.String())
+	for _, a := range agents {
+		c.WriteV2AgentDir(a.Name, e2eAgentTOMLFields(a)...)
+	}
+}
+
+func e2eAgentTOMLFields(a E2EAgent) []string {
+	var fields []string
+	if a.Dir != "" {
+		fields = append(fields, `scope = "rig"`)
+	}
+	if a.StartCommand != "" {
+		fields = append(fields, fmt.Sprintf("start_command = %q", a.StartCommand))
+	}
+	if a.Dir != "" {
+		fields = append(fields, fmt.Sprintf("dir = %q", a.Dir))
+	}
+	if a.WorkDir != "" {
+		fields = append(fields, fmt.Sprintf("work_dir = %q", a.WorkDir))
+	}
+	if a.WorkQuery != "" {
+		fields = append(fields, fmt.Sprintf("work_query = %q", a.WorkQuery))
+	}
+	if a.Suspended {
+		fields = append(fields, "suspended = true")
+	}
+	if a.Pool == nil {
+		fields = append(fields, "max_active_sessions = 1")
+		return fields
+	}
+	fields = append(fields,
+		fmt.Sprintf("min_active_sessions = %d", a.Pool.Min),
+		fmt.Sprintf("max_active_sessions = %d", a.Pool.Max),
+	)
+	if a.Pool.ScaleCheck != "" {
+		fields = append(fields, fmt.Sprintf("scale_check = %q", a.Pool.ScaleCheck))
+	}
+	return fields
 }
 
 // E2EAgent describes an agent for lifecycle tests.
