@@ -67,6 +67,25 @@ func (c *ChaosClient) AckedIDs() []string {
 	return append([]string(nil), c.ackedIDs...)
 }
 
+// ResetAckLedger clears acknowledged write state and switches ledger output.
+func (c *ChaosClient) ResetAckLedger(path string) error {
+	c.mu.Lock()
+	c.ackedWritesPath = path
+	c.lastAckTime = time.Time{}
+	c.ackedIDs = nil
+	c.mu.Unlock()
+	if path == "" {
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return fmt.Errorf("creating acked-writes dir: %w", err)
+	}
+	if err := os.Remove(path); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return fmt.Errorf("removing stale acked-writes ledger: %w", err)
+	}
+	return nil
+}
+
 // Open is a no-op; the child process owns adapter initialization.
 func (c *ChaosClient) Open(context.Context, Config) error { return nil }
 

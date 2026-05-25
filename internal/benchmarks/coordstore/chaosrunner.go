@@ -19,6 +19,10 @@ type ChaosController interface {
 	AckedIDs() []string
 }
 
+type chaosAckLedgerResetter interface {
+	ResetAckLedger(path string) error
+}
+
 // KillEvent records one kill/restart/durability probe.
 type KillEvent struct {
 	KilledAt        time.Time     `json:"killed_at"`
@@ -36,6 +40,7 @@ type ChaosResult struct {
 	RunID                string
 	ResultsDir           string
 	KillEventsPath       string
+	AckedWritesPath      string
 	DurabilityReportPath string
 	KillEvents           []KillEvent
 	Scorecard            Scorecard
@@ -77,6 +82,12 @@ func (r *ChaosRunner) Run(ctx context.Context, w io.Writer) (ChaosResult, error)
 	if err != nil {
 		return ChaosResult{}, fmt.Errorf("chaos seed: %w", err)
 	}
+	ackedWritesPath := filepath.Join(resultDir, "acked-writes.jsonl")
+	if resetter, ok := r.controller.(chaosAckLedgerResetter); ok {
+		if err := resetter.ResetAckLedger(ackedWritesPath); err != nil {
+			return ChaosResult{}, err
+		}
+	}
 	runner := NewRunner(r.controller, workload, seed)
 
 	runCtx, cancel := context.WithCancel(ctx)
@@ -114,6 +125,7 @@ func (r *ChaosRunner) Run(ctx context.Context, w io.Writer) (ChaosResult, error)
 				RunID:                runID,
 				ResultsDir:           resultDir,
 				KillEventsPath:       killEventsPath,
+				AckedWritesPath:      ackedWritesPath,
 				DurabilityReportPath: filepath.Join(resultDir, "durability-report.txt"),
 				KillEvents:           events,
 				Scorecard:            score,

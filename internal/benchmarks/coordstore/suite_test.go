@@ -7,7 +7,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"sync"
 	"testing"
 	"time"
 
@@ -336,16 +335,18 @@ func runChaosBackend(t *testing.T, cfg coordstore.SoakConfig, af adapterFactory)
 	if err := os.MkdirAll(dataDir, 0o755); err != nil {
 		t.Fatalf("mkdir store: %v", err)
 	}
-	adapter := af.newFn()
-	if err := adapter.Open(ctx, coordstore.Config{DataDir: dataDir}); err != nil {
-		t.Fatalf("Open: %v", err)
-	}
-	defer adapter.Close() //nolint:errcheck
-
 	soakCfg := cfg
 	soakCfg.DataDir = dataDir
-	controller := &suiteChaosController{StoreAdapter: adapter}
-	result, err := coordstore.NewChaosRunner(af.name, controller, workload, soakCfg).Run(ctx, testWriter{t})
+	process := coordstore.NewChaosProcess(coordstore.ChaosProcessConfig{
+		Backend:    af.name,
+		SocketPath: filepath.Join(dir, "chaos.sock"),
+		DataDir:    dataDir,
+	})
+	if err := process.Start(ctx); err != nil {
+		t.Fatalf("ChaosProcess start: %v", err)
+	}
+	defer process.Close() //nolint:errcheck
+	result, err := coordstore.NewChaosRunner(af.name, process, workload, soakCfg).Run(ctx, testWriter{t})
 	if err != nil {
 		t.Fatalf("ChaosRunner: %v", err)
 	}
@@ -449,55 +450,6 @@ func killCadenceFromEnv(t *testing.T, defaultCadence time.Duration) time.Duratio
 		return parsed
 	}
 	return defaultCadence
-}
-
-type suiteChaosController struct {
-	coordstore.StoreAdapter
-	mu       sync.Mutex
-	lastAck  time.Time
-	ackedIDs []string
-}
-
-func (c *suiteChaosController) Create(ctx context.Context, r coordstore.Record) (coordstore.Record, error) {
-	created, err := c.StoreAdapter.Create(ctx, r)
-	if err != nil {
-		return coordstore.Record{}, err
-	}
-	c.mu.Lock()
-	c.lastAck = time.Now()
-	c.ackedIDs = append(c.ackedIDs, created.ID)
-	c.mu.Unlock()
-	return created, nil
-}
-
-func (c *suiteChaosController) Update(ctx context.Context, id string, u coordstore.Update) error {
-	if err := c.StoreAdapter.Update(ctx, id, u); err != nil {
-		return err
-	}
-	c.mu.Lock()
-	c.lastAck = time.Now()
-	c.ackedIDs = append(c.ackedIDs, id)
-	c.mu.Unlock()
-	return nil
-}
-
-func (c *suiteChaosController) Kill(context.Context) error { return nil }
-
-func (c *suiteChaosController) Restart(context.Context) (time.Duration, error) {
-	start := time.Now()
-	return time.Since(start), nil
-}
-
-func (c *suiteChaosController) LastAckTime() time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return c.lastAck
-}
-
-func (c *suiteChaosController) AckedIDs() []string {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	return append([]string(nil), c.ackedIDs...)
 }
 
 // printComparison prints a side-by-side pass/fail matrix for all backends.
