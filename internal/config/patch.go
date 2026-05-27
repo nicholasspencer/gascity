@@ -503,6 +503,9 @@ func applyRigPatch(cfg *City, patch *RigPatch) error {
 				r.Suspended = *patch.Suspended
 			}
 			if len(patch.FormulaVars) > 0 {
+				if err := validateNoReservedFormulaVars(fmt.Sprintf("rig %q", patch.Name), patch.FormulaVars); err != nil {
+					return err
+				}
 				if r.FormulaVars == nil {
 					r.FormulaVars = make(map[string]string, len(patch.FormulaVars))
 				}

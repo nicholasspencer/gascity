@@ -90,12 +90,9 @@ Examples:
 			name := args[0]
 			varFlags, _ := cmd.Flags().GetStringArray("var")
 
-			vars := make(map[string]string, len(varFlags))
-			for _, v := range varFlags {
-				key, value, ok := strings.Cut(v, "=")
-				if ok && key != "" {
-					vars[key] = value
-				}
+			vars, err := parseFormulaVars(varFlags)
+			if err != nil {
+				return err
 			}
 
 			compileVars := vars
@@ -508,7 +505,10 @@ bead into a sub-workflow at runtime.`,
 				return err
 			}
 
-			cookVars := parseFormulaVars(vars)
+			cookVars, err := parseFormulaVars(vars)
+			if err != nil {
+				return err
+			}
 
 			if attach != "" {
 				inv, err := graphv2.PrepareInvocation(cmd.Context(), store, args[0], scope.searchPaths, attach, cookVars)
@@ -622,9 +622,12 @@ type formulaCookJSONResult struct {
 	IDMapping      map[string]string `json:"id_mapping,omitempty"`
 }
 
-func parseFormulaVars(varFlags []string) map[string]string {
+func parseFormulaVars(varFlags []string) (map[string]string, error) {
 	if len(varFlags) == 0 {
-		return nil
+		return nil, nil
+	}
+	if err := validateFormulaVarFlags("gc formula", varFlags); err != nil {
+		return nil, err
 	}
 	vars := make(map[string]string, len(varFlags))
 	for _, v := range varFlags {
@@ -634,9 +637,22 @@ func parseFormulaVars(varFlags []string) map[string]string {
 		}
 	}
 	if len(vars) == 0 {
-		return nil
+		return nil, nil
 	}
-	return vars
+	return vars, nil
+}
+
+func validateFormulaVarFlags(surface string, varFlags []string) error {
+	for _, v := range varFlags {
+		key, _, ok := strings.Cut(v, "=")
+		if !ok || key == "" {
+			continue
+		}
+		if strings.TrimSpace(key) == formula.PackRootIntrinsic {
+			return fmt.Errorf("%s: --var %s is reserved and cannot supply the formula intrinsic", surface, strings.TrimSpace(key))
+		}
+	}
+	return nil
 }
 
 func parseMetadataArgs(items []string) (map[string]string, error) {

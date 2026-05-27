@@ -3360,6 +3360,30 @@ build_command = "make build"
 	}
 }
 
+func TestRigFormulaVarsRejectsPackRoot(t *testing.T) {
+	input := `
+[workspace]
+name = "my-city"
+
+[[agent]]
+name = "mayor"
+
+[[rigs]]
+name = "mo"
+path = "/home/user/mo"
+
+[rigs.formula_vars]
+pack_root = "/tmp/override"
+`
+	_, err := Parse([]byte(input))
+	if err == nil {
+		t.Fatal("Parse succeeded, want formula_vars.pack_root rejection")
+	}
+	if !strings.Contains(err.Error(), "formula_vars.pack_root") {
+		t.Fatalf("Parse error = %v, want formula_vars.pack_root mention", err)
+	}
+}
+
 // --- DeriveBeadsPrefix tests ---
 
 func TestDeriveBeadsPrefix(t *testing.T) {

@@ -59,10 +59,12 @@ func compileFormula(name string, searchPaths []string, vars map[string]string, v
 	if err != nil {
 		return nil, fmt.Errorf("resolving formula %q: %w", name, err)
 	}
-	if validateRuntimeVars && len(vars) > 0 {
-		if err := validateNoReservedUserVars(vars); err != nil {
+	if len(vars) > 0 {
+		if err := ValidateNoReservedUserVars(vars); err != nil {
 			return nil, err
 		}
+	}
+	if validateRuntimeVars && len(vars) > 0 {
 		if err := ValidateVars(resolved, vars); err != nil {
 			return nil, err
 		}
@@ -203,9 +205,14 @@ func validateCompileTimeVars(f *Formula, values map[string]string) error {
 	return ValidateVarDefs(defs, ApplyDefaults(f, values))
 }
 
-func validateNoReservedUserVars(vars map[string]string) error {
-	if _, ok := vars[PackRootIntrinsic]; ok {
-		return fmt.Errorf("graph.intrinsic variable %q cannot be supplied by the caller", PackRootIntrinsic)
+// ValidateNoReservedUserVars rejects caller-supplied values for formula
+// intrinsics that must be derived by the runtime.
+func ValidateNoReservedUserVars(vars map[string]string) error {
+	for key := range vars {
+		name := strings.TrimSpace(key)
+		if name == PackRootIntrinsic {
+			return fmt.Errorf("formula intrinsic variable %q cannot be supplied by the caller", name)
+		}
 	}
 	return nil
 }

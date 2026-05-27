@@ -1099,6 +1099,28 @@ func TestBuildSlingFormulaVarsPreservesExplicitRoutingNamespace(t *testing.T) {
 	}
 }
 
+func TestBuildSlingFormulaVarsCheckedRejectsPackRootBeforeMerge(t *testing.T) {
+	cfg := &config.City{
+		Workspace: config.Workspace{Name: "test-city"},
+		Rigs: []config.Rig{{
+			Name:        "mo",
+			Path:        "/mo",
+			FormulaVars: map[string]string{"test_command": "make test-fast"},
+		}},
+	}
+	deps := testDeps(cfg, runtime.NewFake(), newFakeRunner().run)
+
+	_, err := BuildSlingFormulaVarsChecked("mol-polecat-work", "MO-1", []string{
+		"pack_root=/tmp/override",
+	}, config.Agent{Name: "polecat", Dir: "mo"}, deps)
+	if err == nil {
+		t.Fatal("BuildSlingFormulaVarsChecked succeeded, want pack_root rejection")
+	}
+	if !strings.Contains(err.Error(), "sling --var pack_root") {
+		t.Fatalf("BuildSlingFormulaVarsChecked error = %v, want sling --var pack_root mention", err)
+	}
+}
+
 func TestBuildSlingFormulaVarsSeedsEmptyRoutingNamespaceForUnboundAgent(t *testing.T) {
 	deps := testDeps(&config.City{Workspace: config.Workspace{Name: "test"}}, runtime.NewFake(), newFakeRunner().run)
 

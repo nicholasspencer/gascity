@@ -29,6 +29,8 @@ var validAgentName = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*$`)
 // carried separately in NamedSession.Dir, so slashes remain invalid here.
 var validNamedSessionTemplate = regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_-]*(\.[a-zA-Z0-9][a-zA-Z0-9_-]*)?$`)
 
+const reservedFormulaPackRootVar = "pack_root"
+
 const (
 	// ControlDispatcherAgentName is the built-in deterministic control lane for
 	// graph.v2 workflow control beads.
@@ -3505,6 +3507,9 @@ func ValidateRigs(rigs []Rig, hqPrefix string) error {
 		if r.Path == "" {
 			return fmt.Errorf("rig %q: path is required", r.Name)
 		}
+		if err := validateNoReservedFormulaVars(rigFormulaVarsOwner(i, r), r.FormulaVars); err != nil {
+			return err
+		}
 		if seenNames[r.Name] {
 			return fmt.Errorf("rig %q: duplicate name", r.Name)
 		}
@@ -3515,6 +3520,32 @@ func ValidateRigs(rigs []Rig, hqPrefix string) error {
 			return fmt.Errorf("rig %q: prefix %q collides with %s", r.Name, prefix, other)
 		}
 		seenPrefixes[prefix] = r.Name
+	}
+	return nil
+}
+
+func validateNoReservedRigFormulaVars(rigs []Rig) error {
+	for i, r := range rigs {
+		if err := validateNoReservedFormulaVars(rigFormulaVarsOwner(i, r), r.FormulaVars); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func rigFormulaVarsOwner(index int, rig Rig) string {
+	if strings.TrimSpace(rig.Name) != "" {
+		return fmt.Sprintf("rig %q", rig.Name)
+	}
+	return fmt.Sprintf("rig[%d]", index)
+}
+
+func validateNoReservedFormulaVars(owner string, vars map[string]string) error {
+	for key := range vars {
+		name := strings.TrimSpace(key)
+		if name == reservedFormulaPackRootVar {
+			return fmt.Errorf("%s: formula_vars.%s is reserved and cannot supply the formula intrinsic", owner, name)
+		}
 	}
 	return nil
 }
@@ -3666,6 +3697,9 @@ func Parse(data []byte) (*City, error) {
 	// stamp source.
 	for i := range cfg.Agents {
 		cfg.Agents[i].source = sourceInline
+	}
+	if err := validateNoReservedRigFormulaVars(cfg.Rigs); err != nil {
+		return nil, err
 	}
 	return &cfg, nil
 }

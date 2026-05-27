@@ -218,6 +218,16 @@ func TestRigFormulaVarsForScope(t *testing.T) {
 	})
 }
 
+func TestParseFormulaVarsRejectsPackRoot(t *testing.T) {
+	_, err := parseFormulaVars([]string{"pack_root=/tmp/override"})
+	if err == nil {
+		t.Fatal("parseFormulaVars succeeded, want pack_root rejection")
+	}
+	if !strings.Contains(err.Error(), "--var pack_root") {
+		t.Fatalf("parseFormulaVars error = %v, want --var pack_root mention", err)
+	}
+}
+
 // TestResolveFormulaScope_RigFallsBackToCityLayers covers the case where a
 // rig is resolved but has no rig-specific FormulaLayers entry; SearchPaths
 // should fall back to city layers.

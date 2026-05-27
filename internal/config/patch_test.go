@@ -463,6 +463,25 @@ func TestApplyRigPatchFormulaVars(t *testing.T) {
 			t.Errorf("FormulaVars[test_command] = %q, want %q (untouched)", got, "go test ./...")
 		}
 	})
+
+	t.Run("rejects reserved pack_root key", func(t *testing.T) {
+		cfg := &City{Rigs: []Rig{{Name: "mo", Path: "/mo"}}}
+		err := ApplyPatches(cfg, Patches{
+			Rigs: []RigPatch{{
+				Name:        "mo",
+				FormulaVars: map[string]string{"pack_root": "/tmp/override"},
+			}},
+		})
+		if err == nil {
+			t.Fatal("ApplyPatches succeeded, want formula_vars.pack_root rejection")
+		}
+		if !strings.Contains(err.Error(), "formula_vars.pack_root") {
+			t.Fatalf("ApplyPatches error = %v, want formula_vars.pack_root mention", err)
+		}
+		if _, ok := cfg.Rigs[0].FormulaVars["pack_root"]; ok {
+			t.Fatal("reserved pack_root key was applied")
+		}
+	})
 }
 
 func TestApplyPatches_RigNotFound(t *testing.T) {

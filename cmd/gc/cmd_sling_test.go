@@ -4455,6 +4455,26 @@ description = "Target: {{target_id}}, workspace: {{workspace}}"
 	}
 }
 
+func TestFormulaSlingRejectsPackRootVar(t *testing.T) {
+	runner := newFakeRunner()
+	sp := runtime.NewFake()
+	cfg := &config.City{Workspace: config.Workspace{Name: "test-city"}}
+	a := config.Agent{Name: "mayor", MaxActiveSessions: intPtr(1)}
+
+	deps, stdout, stderr := testDeps(cfg, sp, runner.run)
+	opts := testOpts(a, "repro")
+	opts.IsFormula = true
+	opts.Vars = []string{"pack_root=/tmp/override"}
+	code := doSling(opts, deps, nil, stdout, stderr)
+
+	if code != 1 {
+		t.Fatalf("doSling returned %d, want 1; stdout=%s stderr=%s", code, stdout.String(), stderr.String())
+	}
+	if !strings.Contains(stderr.String(), "sling --var pack_root") {
+		t.Fatalf("stderr = %q, want sling --var pack_root mention", stderr.String())
+	}
+}
+
 func TestFormulaSlingReportsRequiredAndResidualTitleVarsWhenSomeVarsProvided(t *testing.T) {
 	runner := newFakeRunner()
 	sp := runtime.NewFake()

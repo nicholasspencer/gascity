@@ -166,6 +166,30 @@ title = "Work {i}"
 	}
 }
 
+func TestCompileWithoutRuntimeVarValidationRejectsCallerPackRootVar(t *testing.T) {
+	dir := t.TempDir()
+	formulaContent := `
+formula = "work"
+version = 1
+type = "workflow"
+
+[[steps]]
+id = "step"
+title = "Step"
+`
+	if err := os.WriteFile(filepath.Join(dir, "work.toml"), []byte(formulaContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := CompileWithoutRuntimeVarValidation(context.Background(), "work", []string{dir}, map[string]string{PackRootIntrinsic: "override"})
+	if err == nil {
+		t.Fatal("CompileWithoutRuntimeVarValidation succeeded, want caller pack_root rejection")
+	}
+	if !strings.Contains(err.Error(), PackRootIntrinsic) {
+		t.Fatalf("CompileWithoutRuntimeVarValidation error = %v, want pack_root mention", err)
+	}
+}
+
 func TestCompileWithoutRuntimeVarValidationValidatesCompileTimeRangeVarDefs(t *testing.T) {
 	dir := t.TempDir()
 	formulaContent := `

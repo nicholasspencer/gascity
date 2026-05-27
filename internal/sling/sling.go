@@ -971,6 +971,32 @@ func rigStoredDefaultBranch(cfg *config.City, beadID string, a config.Agent) str
 // Precedence (highest wins): explicit --var > rig.formula_vars > routing-injected
 // defaults (issue/rig_name/base_branch/...) > formula-level [vars.*].default.
 func BuildSlingFormulaVars(formulaName, beadID string, userVars []string, a config.Agent, deps SlingDeps) map[string]string {
+	return buildSlingFormulaVars(formulaName, beadID, userVars, a, deps)
+}
+
+// BuildSlingFormulaVarsChecked builds formula vars after validating
+// caller-supplied --var keys that must not be merged with runtime defaults.
+func BuildSlingFormulaVarsChecked(formulaName, beadID string, userVars []string, a config.Agent, deps SlingDeps) (map[string]string, error) {
+	if err := validateSlingFormulaVarFlags(userVars); err != nil {
+		return nil, err
+	}
+	return buildSlingFormulaVars(formulaName, beadID, userVars, a, deps), nil
+}
+
+func validateSlingFormulaVarFlags(userVars []string) error {
+	for _, v := range userVars {
+		key, _, ok := strings.Cut(v, "=")
+		if !ok || key == "" {
+			continue
+		}
+		if strings.TrimSpace(key) == formula.PackRootIntrinsic {
+			return fmt.Errorf("sling --var %s is reserved and cannot supply the formula intrinsic", strings.TrimSpace(key))
+		}
+	}
+	return nil
+}
+
+func buildSlingFormulaVars(formulaName, beadID string, userVars []string, a config.Agent, deps SlingDeps) map[string]string {
 	vars := make(map[string]string, len(userVars)+6)
 	for _, v := range userVars {
 		key, value, ok := strings.Cut(v, "=")

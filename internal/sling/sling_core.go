@@ -197,7 +197,10 @@ func validateExistingBeadInQuerier(beadID, storeRef string, querier BeadQuerier)
 func slingFormula(opts SlingOpts, deps SlingDeps) (SlingResult, error) {
 	a := opts.Target
 	method := "formula"
-	formulaVars := BuildSlingFormulaVars(opts.BeadOrFormula, "", opts.Vars, a, deps)
+	formulaVars, err := BuildSlingFormulaVarsChecked(opts.BeadOrFormula, "", opts.Vars, a, deps)
+	if err != nil {
+		return SlingResult{Target: a.QualifiedName()}, err
+	}
 	mResult, err := InstantiateSlingFormula(context.Background(), opts.BeadOrFormula, SlingFormulaSearchPaths(deps, a), molecule.Options{
 		Title: opts.Title,
 		Vars:  formulaVars,
@@ -218,7 +221,10 @@ func slingFormula(opts SlingOpts, deps SlingDeps) (SlingResult, error) {
 func slingOnFormula(opts SlingOpts, deps SlingDeps, querier BeadQuerier, beadID string, result SlingResult) (SlingResult, error) {
 	a := opts.Target
 	method := "on-formula"
-	formulaVars := BuildSlingFormulaVars(opts.OnFormula, beadID, opts.Vars, a, deps)
+	formulaVars, err := BuildSlingFormulaVarsChecked(opts.OnFormula, beadID, opts.Vars, a, deps)
+	if err != nil {
+		return result, err
+	}
 	searchPaths := SlingFormulaSearchPaths(deps, a)
 	isGraph, err := isGraphSlingFormula(context.Background(), opts.OnFormula, searchPaths, formulaVars)
 	if err != nil {
@@ -282,7 +288,10 @@ func slingDefaultFormula(opts SlingOpts, deps SlingDeps, querier BeadQuerier, be
 	a := opts.Target
 	method := "default-on-formula"
 	defaultFormula := a.EffectiveDefaultSlingFormula()
-	defaultVars := BuildSlingFormulaVars(defaultFormula, beadID, opts.Vars, a, deps)
+	defaultVars, err := BuildSlingFormulaVarsChecked(defaultFormula, beadID, opts.Vars, a, deps)
+	if err != nil {
+		return result, err
+	}
 	searchPaths := SlingFormulaSearchPaths(deps, a)
 	isGraph, err := isGraphSlingFormula(context.Background(), defaultFormula, searchPaths, defaultVars)
 	if err != nil {
@@ -898,7 +907,10 @@ func sourceWorkflowRootByIDInStore(store beads.Store, sourceBeadID, workflowID, 
 // DoSlingBatch so that compiling N times for N children becomes a single
 // compile per batch.
 func attachBatchFormula(ctx context.Context, opts SlingOpts, deps SlingDeps, child beads.Bead, a config.Agent, formulaName, formulaLabel, method string, isGraph bool) (SlingResult, error) {
-	childVars := BuildSlingFormulaVars(formulaName, child.ID, opts.Vars, a, deps)
+	childVars, err := BuildSlingFormulaVarsChecked(formulaName, child.ID, opts.Vars, a, deps)
+	if err != nil {
+		return SlingResult{}, err
+	}
 	run := func() (SlingResult, error) {
 		mResult, err := InstantiateSlingFormula(ctx, formulaName, SlingFormulaSearchPaths(deps, a), molecule.Options{
 			Title:            opts.Title,
@@ -961,7 +973,10 @@ func validateSlingFormulaRuntimeVars(ctx context.Context, formulaName string, se
 
 func validateBatchSlingFormulaRuntimeVars(ctx context.Context, formulaName string, searchPaths []string, opts SlingOpts, open []beads.Bead, a config.Agent, deps SlingDeps) error {
 	for _, child := range open {
-		childVars := BuildSlingFormulaVars(formulaName, child.ID, opts.Vars, a, deps)
+		childVars, err := BuildSlingFormulaVarsChecked(formulaName, child.ID, opts.Vars, a, deps)
+		if err != nil {
+			return err
+		}
 		if err := validateSlingFormulaRuntimeVars(ctx, formulaName, searchPaths, molecule.Options{
 			Title: opts.Title,
 			Vars:  childVars,
@@ -1101,9 +1116,11 @@ func DoSlingBatch(opts SlingOpts, deps SlingDeps, querier BeadChildQuerier) (Sli
 	// reads + template expansions for an N-child batch.
 	var isGraph bool
 	if useFormula != "" {
-		formulaVars := BuildSlingFormulaVars(useFormula, "", opts.Vars, a, deps)
+		formulaVars, err := BuildSlingFormulaVarsChecked(useFormula, "", opts.Vars, a, deps)
+		if err != nil {
+			return SlingResult{}, err
+		}
 		searchPaths := SlingFormulaSearchPaths(deps, a)
-		var err error
 		isGraph, err = isGraphSlingFormula(context.Background(), useFormula, searchPaths, formulaVars)
 		if err != nil {
 			return SlingResult{}, fmt.Errorf("instantiating formula %q on %s %s: %w", useFormula, b.Type, b.ID, err)
