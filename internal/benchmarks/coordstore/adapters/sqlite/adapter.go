@@ -96,6 +96,10 @@ func (a *Adapter) Open(ctx context.Context, cfg coordstore.Config) error {
 		writeDB.Close() //nolint:errcheck
 		return fmt.Errorf("sqlite: apply schema: %w", err)
 	}
+	if err := a.recoverSequence(ctx, writeDB); err != nil {
+		writeDB.Close() //nolint:errcheck
+		return err
+	}
 
 	// Read connection pool: WAL allows concurrent reads even during writes.
 	// Opened without mode=ro so WAL wal-index is fully shared; the Go code
@@ -190,6 +194,41 @@ func (a *Adapter) nextID() string {
 		prefix = "sq"
 	}
 	return fmt.Sprintf("%s-%d", prefix, a.seq.Add(1))
+}
+
+func (a *Adapter) recoverSequence(ctx context.Context, db *sql.DB) error {
+	prefix := a.idPrefix
+	if prefix == "" {
+		prefix = "sq"
+	}
+	rows, err := db.QueryContext(ctx, `
+SELECT id FROM records WHERE id LIKE ?
+UNION ALL
+SELECT id FROM ephemeral WHERE id LIKE ?`, prefix+"-%", prefix+"-%")
+	if err != nil {
+		return fmt.Errorf("sqlite: recover id sequence: %w", err)
+	}
+	defer rows.Close() //nolint:errcheck
+	var maxSeq int64
+	for rows.Next() {
+		var id string
+		if err := rows.Scan(&id); err != nil {
+			return fmt.Errorf("sqlite: recover id sequence scan: %w", err)
+		}
+		raw := strings.TrimPrefix(id, prefix+"-")
+		value, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			continue
+		}
+		if value > maxSeq {
+			maxSeq = value
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("sqlite: recover id sequence rows: %w", err)
+	}
+	a.seq.Store(maxSeq)
+	return nil
 }
 
 // --- FR-1: CRUD ---
