@@ -1227,6 +1227,31 @@ func openHQStoreUncached(scopeRoot, cityPath, storeDir string) (*beads.HQStore, 
 	)
 }
 
+func openCoordStoreAt(scopeRoot, cityPath string) (beads.Store, error) {
+	storeDir, err := canonicalCoordStoreDir(scopeRoot)
+	if err != nil {
+		return nil, err
+	}
+	cfg, err := loadCityConfig(cityPath, io.Discard)
+	if err != nil {
+		cfg = nil
+	}
+	return beads.OpenSQLiteCGOStore(
+		storeDir,
+		beads.WithSQLiteCGOStoreIDPrefix(issuePrefixForScope(scopeRoot, cityPath, cfg)),
+		beads.WithSQLiteCGOStoreRetention(4*time.Hour, 30*time.Second),
+	)
+}
+
+func canonicalCoordStoreDir(scopeRoot string) (string, error) {
+	storeDir := filepath.Join(scopeRoot, ".gc", "coordstore")
+	abs, err := filepath.Abs(filepath.Clean(storeDir))
+	if err != nil {
+		return "", fmt.Errorf("resolving coordstore dir %q: %w", storeDir, err)
+	}
+	return abs, nil
+}
+
 func openStoreAtForCity(storePath, cityPath string) (beads.Store, error) {
 	runtimeCityPath := cityPath
 	if runtimeCityPath == "" {
@@ -1266,6 +1291,8 @@ func openStoreAtForCity(storePath, cityPath string) (beads.Store, error) {
 	switch provider {
 	case "file":
 		return openCompatibleFileStore(scopeRoot, runtimeCityPath)
+	case "coordstore", "sqlite-cgo":
+		return openCoordStoreAt(scopeRoot, runtimeCityPath)
 	case "hqstore":
 		return openHQStoreAt(scopeRoot, runtimeCityPath)
 	default: // "bd" or unrecognized → use bd
