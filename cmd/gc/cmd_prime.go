@@ -307,6 +307,7 @@ func doPrimeWithHookFormat(args []string, stdout, stderr io.Writer, hookMode boo
 		if a.PromptTemplate != "" || hookMode || sessionTemplateContext {
 			ctx = buildPrimeContext(cityPath, cityName, &a, cfg.Rigs, stderr)
 			ctx.ProviderKey, ctx.ProviderDisplayName = providerInfoForAgent(&a, &cfg.Workspace, cfg.Providers)
+			ctx.InstructionsFile = instructionsFileForAgent(&a, &cfg.Workspace, cfg.Providers)
 		}
 		if a.PromptTemplate != "" {
 			fragments := effectivePromptFragments(
@@ -316,8 +317,9 @@ func doPrimeWithHookFormat(args []string, stdout, stderr io.Writer, hookMode boo
 				a.InheritedAppendFragments,
 				cfg.AgentDefaults.AppendFragments,
 			)
+			packDirs := cfg.PackDirsForRig(ctx.RigName)
 			prompt := renderPrompt(fsys.OSFS{}, cityPath, cityName, a.PromptTemplate, ctx, cfg.Workspace.SessionTemplate, stderr,
-				cfg.PackDirs, fragments, nil)
+				packDirs, fragments, nil)
 			if prompt != "" {
 				writePrimePromptWithFormat(stdout, cityName, ctx.AgentName, prompt, hookMode, hookFormat, suppressHookPrompt)
 				return 0
@@ -557,7 +559,10 @@ func persistPrimeHookSessionID(sessionID string) {
 
 func persistPrimeHookProviderSessionKey() {
 	gcSessionID := strings.TrimSpace(os.Getenv("GC_SESSION_ID"))
-	providerSessionID := strings.TrimSpace(os.Getenv("GEMINI_SESSION_ID"))
+	providerSessionID := strings.TrimSpace(os.Getenv("GC_PROVIDER_SESSION_ID"))
+	if providerSessionID == "" {
+		providerSessionID = strings.TrimSpace(os.Getenv("GEMINI_SESSION_ID"))
+	}
 	if gcSessionID == "" || providerSessionID == "" || gcSessionID == providerSessionID {
 		return
 	}

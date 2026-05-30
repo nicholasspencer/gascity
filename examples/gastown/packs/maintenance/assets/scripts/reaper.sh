@@ -8,6 +8,11 @@
 # Runs as an exec order (no LLM, no agent, no wisp).
 set -euo pipefail
 
+# Trace bd invocations to $GC_BD_TRACE when set (no-op otherwise).
+__SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# shellcheck disable=SC1091
+. "$__SCRIPT_DIR/_bd_trace.sh" "reaper"
+
 CITY="${GC_CITY_PATH:-${GC_CITY:-.}}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$SCRIPT_DIR/dolt-target.sh"
@@ -20,6 +25,7 @@ PURGE_AGE="${GC_REAPER_PURGE_AGE:-168h}"
 STALE_ISSUE_AGE="${GC_REAPER_STALE_ISSUE_AGE:-720h}"
 SESSION_PURGE_AGE="${GC_REAPER_SESSION_PURGE_AGE:-720h}"
 ALERT_THRESHOLD="${GC_REAPER_ALERT_THRESHOLD:-500}"
+MAIL_ALERT_THRESHOLD="${GC_REAPER_MAIL_ALERT_THRESHOLD:-0}"  # 0 = disabled
 DRY_RUN="${GC_REAPER_DRY_RUN:-}"
 
 # Convert Go durations to SQL INTERVAL hours for Dolt.
@@ -114,6 +120,7 @@ fi
 TOTAL_STALE_WISPS=0
 TOTAL_CLOSED_WISPS=0
 TOTAL_PURGED=0
+TOTAL_MAIL_WISPS=0
 TOTAL_ISSUES_CLOSED=0
 TOTAL_STALE_ISSUES_SKIPPED=0
 TOTAL_SESSIONS_PRUNED=0
@@ -121,7 +128,7 @@ SESSION_PRUNE_ATTEMPTED=0
 ANOMALIES=""
 
 sanitize_output() {
-    printf '%s' "$1" | tr '\n' ' ' | cut -c1-500
+    printf '%s' "$1" | tr '\n' ' ' | cut -c1-4000
 }
 
 record_anomaly() {
@@ -208,7 +215,7 @@ get_sql_count() {
     if ! output=$(dolt_sql -r csv -q "$query" 2>"$stderr_file"); then
         stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
         rm -f "$stderr_file"
-        record_anomaly "$db" "$label count failed for $db: $(sanitize_output "$output $stderr_output")"
+        record_anomaly "$db" "$label count failed for $db: $(sanitize_output "$stderr_output $output")"
         return 0
     fi
     rm -f "$stderr_file"
@@ -239,7 +246,7 @@ get_sql_rows() {
     if ! output=$(dolt_sql -r csv -q "$query" 2>"$stderr_file"); then
         stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
         rm -f "$stderr_file"
-        record_anomaly "$db" "$label query failed for $db: $(sanitize_output "$output $stderr_output")"
+        record_anomaly "$db" "$label query failed for $db: $(sanitize_output "$stderr_output $output")"
         return 0
     fi
     rm -f "$stderr_file"
@@ -301,7 +308,7 @@ SELECT ROW_COUNT();
     " 2>"$stderr_file"); then
         stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
         rm -f "$stderr_file"
-        record_anomaly "$db" "$label failed for $db: $(sanitize_output "$output $stderr_output")"
+        record_anomaly "$db" "$label failed for $db: $(sanitize_output "$stderr_output $output")"
         return 1
     fi
     stderr_output=$(cat "$stderr_file" 2>/dev/null || true)
@@ -309,7 +316,7 @@ SELECT ROW_COUNT();
 
     rows=$(printf '%s\n' "$output" | tail -1 | tr -d '\r')
     if [ -z "$rows" ] || ! [[ "$rows" =~ ^[0-9]+$ ]]; then
-        record_anomaly "$db" "$label returned non-numeric row count for $db: $(sanitize_output "$output $stderr_output")"
+        record_anomaly "$db" "$label returned non-numeric row count for $db: $(sanitize_output "$stderr_output $output")"
         return 1
     fi
 
@@ -490,15 +497,29 @@ while IFS= read -r DB; do
         fi
     fi
 
-    # Step 5: Anomaly check — open wisp count.
-    get_sql_count "$DB" "open wisp" "
+    # Step 5a: Anomaly check — reapable open wisp count.
+    get_sql_count "$DB" "reapable open wisp" "
         SELECT COUNT(*) FROM \`$DB\`.wisps
         WHERE status IN ('open', 'hooked', 'in_progress')
+        AND issue_type NOT IN ('message')
     "
-    OPEN_WISPS=$SQL_COUNT_RESULT
+    REAPABLE_WISPS=$SQL_COUNT_RESULT
 
-    if [ "$OPEN_WISPS" -gt "$ALERT_THRESHOLD" ]; then
-        ANOMALIES="${ANOMALIES}$DB: $OPEN_WISPS open wisps (threshold: $ALERT_THRESHOLD)\n"
+    if [ "$REAPABLE_WISPS" -gt "$ALERT_THRESHOLD" ]; then
+        ANOMALIES="${ANOMALIES}$DB: $REAPABLE_WISPS open wisps (threshold: $ALERT_THRESHOLD)\n"
+    fi
+
+    # Step 5b: Mail-wisp backlog count, observed separately from reapable wisps.
+    get_sql_count "$DB" "open mail wisp" "
+        SELECT COUNT(*) FROM \`$DB\`.wisps
+        WHERE status IN ('open', 'hooked', 'in_progress')
+        AND issue_type = 'message'
+    "
+    MAIL_WISPS=$SQL_COUNT_RESULT
+    TOTAL_MAIL_WISPS=$((TOTAL_MAIL_WISPS + MAIL_WISPS))
+
+    if [ "$MAIL_ALERT_THRESHOLD" -gt 0 ] && [ "$MAIL_WISPS" -gt "$MAIL_ALERT_THRESHOLD" ]; then
+        ANOMALIES="${ANOMALIES}$DB: $MAIL_WISPS open mail-wisps (mail threshold: $MAIL_ALERT_THRESHOLD)\n"
     fi
 
     # Commit Dolt changes. Must use CALL (not SELECT) and have an active
@@ -558,7 +579,7 @@ if [ -n "$ANOMALIES" ]; then
         -m "$ANOMALIES" 2>/dev/null || true
 fi
 
-SUMMARY="reaper — stale_wisps:$TOTAL_STALE_WISPS, closed_wisps:$TOTAL_CLOSED_WISPS, purged:$TOTAL_PURGED, sessions-pruned:$TOTAL_SESSIONS_PRUNED, closed:$TOTAL_ISSUES_CLOSED, skipped_non_city_issues:$TOTAL_STALE_ISSUES_SKIPPED"
+SUMMARY="reaper — stale_wisps:$TOTAL_STALE_WISPS, closed_wisps:$TOTAL_CLOSED_WISPS, purged:$TOTAL_PURGED, sessions-pruned:$TOTAL_SESSIONS_PRUNED, closed:$TOTAL_ISSUES_CLOSED, skipped_non_city_issues:$TOTAL_STALE_ISSUES_SKIPPED, mail_wisps:$TOTAL_MAIL_WISPS"
 if [ -n "$DRY_RUN" ]; then
     SUMMARY="$SUMMARY (dry run)"
 fi

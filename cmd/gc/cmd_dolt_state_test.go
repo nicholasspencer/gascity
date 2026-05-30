@@ -264,8 +264,25 @@ func TestDoltStateRuntimeLayoutCmdHonorsProjectedOverrides(t *testing.T) {
 	}
 }
 
+func clearManagedDoltRuntimeEnvForTest(t *testing.T) {
+	t.Helper()
+	for _, key := range []string{
+		"GC_CITY_RUNTIME_DIR",
+		"GC_PACK_STATE_DIR",
+		"GC_DOLT_DATA_DIR",
+		"GC_DOLT_LOG_FILE",
+		"GC_DOLT_STATE_FILE",
+		"GC_DOLT_PID_FILE",
+		"GC_DOLT_LOCK_FILE",
+		"GC_DOLT_CONFIG_FILE",
+	} {
+		t.Setenv(key, "")
+	}
+}
+
 func TestDoltStateAllocatePortCmdHonorsEnvOverride(t *testing.T) {
 	cityPath := t.TempDir()
+	clearManagedDoltRuntimeEnvForTest(t)
 	t.Setenv("GC_DOLT_PORT", "4406")
 
 	var stdout, stderr bytes.Buffer
@@ -275,6 +292,69 @@ func TestDoltStateAllocatePortCmdHonorsEnvOverride(t *testing.T) {
 	}
 	if got := strings.TrimSpace(stdout.String()); got != "4406" {
 		t.Fatalf("allocate-port = %q, want 4406", got)
+	}
+}
+
+func TestDoltStateAllocatePortCmdPrefersLiveProviderStateOverStaleEnv(t *testing.T) {
+	cityPath := t.TempDir()
+	clearManagedDoltRuntimeEnvForTest(t)
+	stateFile := filepath.Join(t.TempDir(), "dolt-provider-state.json")
+	layout, err := resolveManagedDoltRuntimeLayout(cityPath)
+	if err != nil {
+		t.Fatalf("resolveManagedDoltRuntimeLayout: %v", err)
+	}
+	listener := listenOnRandomPort(t)
+	defer listener.Close() //nolint:errcheck // test cleanup
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := writeDoltRuntimeStateFile(stateFile, doltRuntimeState{
+		Running:   true,
+		PID:       os.Getpid(),
+		Port:      port,
+		DataDir:   layout.DataDir,
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("writeDoltRuntimeStateFile: %v", err)
+	}
+	t.Setenv("GC_DOLT_PORT", "4406")
+
+	var stdout, stderr bytes.Buffer
+	code := run([]string{"dolt-state", "allocate-port", "--city", cityPath, "--state-file", stateFile}, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("run() = %d, stderr = %s", code, stderr.String())
+	}
+	if got := strings.TrimSpace(stdout.String()); got != strconv.Itoa(port) {
+		t.Fatalf("allocate-port = %q, want live provider state port %d", got, port)
+	}
+}
+
+func TestChooseManagedDoltPortPrefersLiveProviderStateOverStaleEnv(t *testing.T) {
+	cityPath := t.TempDir()
+	clearManagedDoltRuntimeEnvForTest(t)
+	stateFile := filepath.Join(t.TempDir(), "dolt-provider-state.json")
+	layout, err := resolveManagedDoltRuntimeLayout(cityPath)
+	if err != nil {
+		t.Fatalf("resolveManagedDoltRuntimeLayout: %v", err)
+	}
+	listener := listenOnRandomPort(t)
+	defer listener.Close() //nolint:errcheck // test cleanup
+	port := listener.Addr().(*net.TCPAddr).Port
+	if err := writeDoltRuntimeStateFile(stateFile, doltRuntimeState{
+		Running:   true,
+		PID:       os.Getpid(),
+		Port:      port,
+		DataDir:   layout.DataDir,
+		StartedAt: time.Now().UTC().Format(time.RFC3339),
+	}); err != nil {
+		t.Fatalf("writeDoltRuntimeStateFile: %v", err)
+	}
+	t.Setenv("GC_DOLT_PORT", "4406")
+
+	got, err := chooseManagedDoltPort(cityPath, stateFile)
+	if err != nil {
+		t.Fatalf("chooseManagedDoltPort: %v", err)
+	}
+	if got != strconv.Itoa(port) {
+		t.Fatalf("chooseManagedDoltPort = %q, want live provider state port %d", got, port)
 	}
 }
 
@@ -898,20 +978,30 @@ func TestDoltStateInspectManagedCmdDetectsDeletedInodes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("resolveManagedDoltRuntimeLayout: %v", err)
 	}
+	// The child opens a file, unlinks it while the fd is still held, and
+	// blocks. inspect-managed sees the deleted inode by walking the child's
+	// open fds. The unlink must complete BEFORE inspect-managed runs, so
+	// the child signals readiness via a marker file and the parent polls
+	// for it. Without this sync the test races and sporadically observes
+	// the inode as still-linked. (ga-q42 flake.)
+	readyFile := filepath.Join(t.TempDir(), "deleted-inode.ready")
 	proc := exec.Command("python3", "-c", `
 import os, signal, sys, time
 path = sys.argv[1]
+ready_file = sys.argv[2]
 os.makedirs(path, exist_ok=True)
 stale = os.path.join(path, "stale-open.txt")
 f = open(stale, "w+")
 f.write("stale")
 f.flush()
 os.unlink(stale)
+with open(ready_file, "w", encoding="utf-8") as r:
+    r.write("ready\n")
 signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
 signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
 while True:
     time.sleep(1)
-`, layout.DataDir)
+`, layout.DataDir, readyFile)
 	if err := proc.Start(); err != nil {
 		t.Fatalf("start python: %v", err)
 	}
@@ -919,6 +1009,16 @@ while True:
 		_ = proc.Process.Kill()
 		_, _ = proc.Process.Wait()
 	}()
+	deadline := time.Now().Add(5 * time.Second)
+	for time.Now().Before(deadline) {
+		if _, err := os.Stat(readyFile); err == nil {
+			break
+		}
+		time.Sleep(25 * time.Millisecond)
+	}
+	if _, err := os.Stat(readyFile); err != nil {
+		t.Fatalf("python child did not signal readiness within 5s: %v", err)
+	}
 	if err := os.MkdirAll(filepath.Dir(layout.PIDFile), 0o755); err != nil {
 		t.Fatal(err)
 	}

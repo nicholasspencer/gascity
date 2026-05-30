@@ -24,13 +24,10 @@ const (
 // TierMode selects which storage tier(s) a List query reads from.
 // The zero value is TierIssues.
 //
-// For BdStore, where issues and wisps live in physically separate Dolt
-// tables, TierIssues is naturally tier-restricted by the underlying
-// `bd list` call. For in-memory stores (MemStore, ApplyListQuery) where
-// both tiers may share a single backing slice, Matches now filters out
-// any bead with Ephemeral=true under TierIssues. Pre-PR, such a query
-// would have returned ephemeral rows mixed in; callers that relied on
-// that behavior must opt into TierBoth explicitly.
+// TierIssues is the permanent tier and filters out Ephemeral rows when a store
+// returns them to the caller. TierBoth is a logical union; implementations may
+// satisfy it through a single backend query when the backing store exposes a
+// supported union surface for the requested bead type.
 type TierMode int
 
 const (
@@ -68,6 +65,10 @@ type ListQuery struct {
 	ParentID      string
 	Metadata      map[string]string
 	CreatedBefore time.Time
+	// UpdatedBefore matches beads whose UpdatedAt is before this timestamp.
+	// Legacy beads with zero UpdatedAt fall back to CreatedAt. Purge callers
+	// using CachingStore must also set Live: true to avoid stale cached timestamps.
+	UpdatedBefore time.Time
 	Limit         int
 	IncludeClosed bool
 	AllowScan     bool
@@ -108,7 +109,8 @@ func (q ListQuery) HasFilter() bool {
 		q.Assignee != "" ||
 		q.ParentID != "" ||
 		len(q.Metadata) > 0 ||
-		!q.CreatedBefore.IsZero()
+		!q.CreatedBefore.IsZero() ||
+		!q.UpdatedBefore.IsZero()
 }
 
 // IncludesClosed reports whether the query may return closed beads.
@@ -155,7 +157,17 @@ func (q ListQuery) Matches(b Bead) bool {
 	if !q.CreatedBefore.IsZero() && !b.CreatedAt.Before(q.CreatedBefore) {
 		return false
 	}
+	if !q.UpdatedBefore.IsZero() && !beadUpdatedReferenceTime(b).Before(q.UpdatedBefore) {
+		return false
+	}
 	return true
+}
+
+func beadUpdatedReferenceTime(b Bead) time.Time {
+	if !b.UpdatedAt.IsZero() {
+		return b.UpdatedAt
+	}
+	return b.CreatedAt
 }
 
 func beadHasLabel(b Bead, want string) bool {

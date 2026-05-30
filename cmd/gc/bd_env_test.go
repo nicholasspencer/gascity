@@ -14,6 +14,7 @@ import (
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/beads/contract"
 	"github.com/gastownhall/gascity/internal/config"
+	"github.com/gastownhall/gascity/internal/events"
 	"github.com/gastownhall/gascity/internal/pgauth"
 )
 
@@ -188,6 +189,95 @@ func TestBdRuntimeEnvIncludesDoltHost(t *testing.T) {
 	}
 	if got := env["BEADS_DOLT_AUTO_START"]; got != "0" {
 		t.Errorf("BEADS_DOLT_AUTO_START = %q, want %q", got, "0")
+	}
+}
+
+func TestBdRuntimeEnvDisablesCLIRemoteSync(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("BD_DOLT_SYNC_CLI_REMOTES", "true")
+	t.Setenv("BEADS_DOLT_SYNC_CLI_REMOTES", "true")
+
+	env := mustBdRuntimeEnv(t, t.TempDir())
+	if got := env["BD_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BD_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+	if got := env["BEADS_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BEADS_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+}
+
+func TestCityRuntimeProcessEnvDisablesCLIRemoteSync(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("BD_DOLT_SYNC_CLI_REMOTES", "true")
+	t.Setenv("BEADS_DOLT_SYNC_CLI_REMOTES", "true")
+
+	env := mustCityRuntimeProcessEnv(t, t.TempDir())
+	values := map[string]string{}
+	for _, entry := range env {
+		key, value, ok := strings.Cut(entry, "=")
+		if ok {
+			values[key] = value
+		}
+	}
+	if got := values["BD_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BD_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+	if got := values["BEADS_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BEADS_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+}
+
+func TestSessionBackendEnvDisablesCLIRemoteSync(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("BD_DOLT_SYNC_CLI_REMOTES", "true")
+	t.Setenv("BEADS_DOLT_SYNC_CLI_REMOTES", "true")
+
+	env := mustSessionBackendEnv(t, t.TempDir(), "", nil)
+	if got := env["BD_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BD_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+	if got := env["BEADS_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BEADS_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+}
+
+func TestRecoverManagedBDCommandDisablesCLIRemoteSync(t *testing.T) {
+	t.Setenv("GC_BEADS", "bd")
+	t.Setenv("BD_DOLT_SYNC_CLI_REMOTES", "true")
+	t.Setenv("BEADS_DOLT_SYNC_CLI_REMOTES", "true")
+
+	cityPath := t.TempDir()
+	envFile := filepath.Join(cityPath, "recover-env.txt")
+	scriptPath := gcBeadsBdScriptPath(cityPath)
+	if err := os.MkdirAll(filepath.Dir(scriptPath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	script := "#!/bin/sh\n" +
+		"printf 'BD_DOLT_SYNC_CLI_REMOTES=%s\\n' \"$BD_DOLT_SYNC_CLI_REMOTES\" > \"" + envFile + "\"\n" +
+		"printf 'BEADS_DOLT_SYNC_CLI_REMOTES=%s\\n' \"$BEADS_DOLT_SYNC_CLI_REMOTES\" >> \"" + envFile + "\"\n"
+	if err := os.WriteFile(scriptPath, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := recoverManagedBDCommand(cityPath); err != nil {
+		t.Fatalf("recoverManagedBDCommand() error = %v", err)
+	}
+	data, err := os.ReadFile(envFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	values := map[string]string{}
+	for _, line := range strings.Split(strings.TrimSpace(string(data)), "\n") {
+		key, value, ok := strings.Cut(line, "=")
+		if ok {
+			values[key] = value
+		}
+	}
+	if got := values["BD_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BD_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
+	}
+	if got := values["BEADS_DOLT_SYNC_CLI_REMOTES"]; got != "false" {
+		t.Fatalf("BEADS_DOLT_SYNC_CLI_REMOTES = %q, want false", got)
 	}
 }
 
@@ -3513,6 +3603,7 @@ func clearAmbientPostgresEnv(t *testing.T) {
 
 func TestApplyResolvedScopePostgresEnv_HappyPath(t *testing.T) {
 	clearAmbientPostgresEnv(t)
+	cityPath := t.TempDir()
 	scopeRoot := t.TempDir()
 	writePGScopeFixture(t, scopeRoot, "devpw")
 
@@ -3524,7 +3615,7 @@ func TestApplyResolvedScopePostgresEnv_HappyPath(t *testing.T) {
 		PostgresUser:     "bd",
 		PostgresDatabase: "beads",
 	}
-	if err := applyResolvedScopePostgresEnv(env, scopeRoot, meta); err != nil {
+	if err := applyResolvedScopePostgresEnv(env, cityPath, scopeRoot, meta); err != nil {
 		t.Fatalf("applyResolvedScopePostgresEnv: %v", err)
 	}
 	want := map[string]string{
@@ -3539,6 +3630,49 @@ func TestApplyResolvedScopePostgresEnv_HappyPath(t *testing.T) {
 		if got := env[key]; got != value {
 			t.Errorf("env[%q] = %q, want %q", key, got, value)
 		}
+	}
+}
+
+func TestEmitPostgresCredentialResolved_DedupsWithinProcess(t *testing.T) {
+	clearAmbientPostgresEnv(t)
+
+	cityPath := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(cityPath, ".gc"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	scopeA := t.TempDir()
+	writePGScopeFixture(t, scopeA, "devpw")
+	scopeB := t.TempDir()
+	writePGScopeFixture(t, scopeB, "devpw")
+
+	meta := contract.MetadataState{
+		Backend:          "postgres",
+		PostgresHost:     "db.example.test",
+		PostgresPort:     "5432",
+		PostgresUser:     "bd",
+		PostgresDatabase: "beads",
+	}
+	for i := 0; i < 10; i++ {
+		if err := applyResolvedScopePostgresEnv(map[string]string{}, cityPath, scopeA, meta); err != nil {
+			t.Fatalf("scopeA call %d: %v", i, err)
+		}
+	}
+	for i := 0; i < 10; i++ {
+		if err := applyResolvedScopePostgresEnv(map[string]string{}, cityPath, scopeB, meta); err != nil {
+			t.Fatalf("scopeB call %d: %v", i, err)
+		}
+	}
+
+	got, err := events.ReadFiltered(
+		filepath.Join(cityPath, ".gc", "events.jsonl"),
+		events.Filter{Type: events.PostgresCredentialResolved},
+	)
+	if err != nil {
+		t.Fatalf("ReadFiltered pg.credential_resolved: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("pg.credential_resolved count = %d, want 2 (one per distinct scope)", len(got))
 	}
 }
 
@@ -4019,6 +4153,7 @@ func TestMergeRuntimeEnvScrubsPostgresKeys(t *testing.T) {
 
 func TestApplyResolvedScopePostgresEnv_NoPasswordResolvable(t *testing.T) {
 	clearAmbientPostgresEnv(t)
+	cityPath := t.TempDir()
 	scopeRoot := t.TempDir()
 	if err := os.MkdirAll(filepath.Join(scopeRoot, ".beads"), 0o700); err != nil {
 		t.Fatal(err)
@@ -4032,7 +4167,7 @@ func TestApplyResolvedScopePostgresEnv_NoPasswordResolvable(t *testing.T) {
 		PostgresUser:     "bd",
 		PostgresDatabase: "beads",
 	}
-	err := applyResolvedScopePostgresEnv(env, scopeRoot, meta)
+	err := applyResolvedScopePostgresEnv(env, cityPath, scopeRoot, meta)
 	if err == nil {
 		t.Fatal("applyResolvedScopePostgresEnv = nil error, want resolver exhaustion")
 	}
@@ -4477,6 +4612,11 @@ func TestProjectedKeysCoverage(t *testing.T) {
 	for _, key := range projectedDoltEnvKeys {
 		if !projectedKeyStripped(key) {
 			t.Errorf("projectedDoltEnvKeys[%q] is not in mergeRuntimeEnv strip list - symmetry broken", key)
+		}
+	}
+	for _, key := range bdCLIRemoteSyncOptOutEnvKeys {
+		if !projectedKeyStripped(key) {
+			t.Errorf("bdCLIRemoteSyncOptOutEnvKeys[%q] is not in mergeRuntimeEnv strip list - symmetry broken", key)
 		}
 	}
 }

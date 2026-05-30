@@ -13,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/gastownhall/gascity/internal/agentutil"
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
 	convoycore "github.com/gastownhall/gascity/internal/convoy"
@@ -157,6 +158,7 @@ type slingOpts = sling.SlingOpts
 var (
 	slingPokeController        = pokeController
 	slingPokeControlDispatcher = pokeControlDispatch
+	slingOpenCityStore         = openCityStoreAt
 )
 
 // slingDeps is an alias for sling.SlingDeps.
@@ -623,7 +625,11 @@ func (r cliBeadRouter) Route(_ context.Context, req sling.RouteRequest) error {
 	if r.deps.Store == nil {
 		return fmt.Errorf("built-in sling routing requires a store")
 	}
-	if err := r.deps.Store.SetMetadata(req.BeadID, "gc.routed_to", req.Target); err != nil {
+	routedTo := req.Target
+	if r.deps.Cfg != nil {
+		routedTo = agentutil.NormalizePoolRouteTarget(r.deps.Cfg, req.Target)
+	}
+	if err := r.deps.Store.SetMetadata(req.BeadID, "gc.routed_to", routedTo); err != nil {
 		return fmt.Errorf("setting gc.routed_to on %s: %w", req.BeadID, err)
 	}
 	return nil
@@ -1463,20 +1469,33 @@ func doSlingNudge(a *config.Agent, cityName, cityPath string, cfg *config.City,
 	}
 
 	if a.SupportsInstanceExpansion() {
-		// Find a running multi-session instance to nudge.
 		sp0 := scaleParamsFor(a)
-		for _, qn := range discoverPoolInstances(a.Name, a.Dir, sp0, a, cityName, st, sp) {
-			sn := lookupSessionNameOrLegacy(store, cityName, qn, st)
-			running, err := workerSessionTargetRunningWithConfig(cityPath, store, sp, cfg, sn)
-			if err == nil && running {
-				member, ok := resolveAgentIdentity(cfg, qn, currentRigContext(cfg))
+		tryNudgeStore := func(sessionStore beads.Store) bool {
+			refs := resolvePoolSessionRefs(sessionStore, cfg, a.Name, a.Dir, sp0, a, cityName, st, sp, stderr)
+			for _, ref := range refs {
+				running, err := workerSessionTargetRunningWithConfig(cityPath, sessionStore, sp, cfg, ref.sessionName)
+				if err != nil || !running {
+					continue
+				}
+				member, ok := resolveAgentIdentity(cfg, ref.qualifiedInstance, currentRigContext(cfg))
 				if !ok {
-					fmt.Fprintf(stderr, "gc sling: agent %q not found in config\n", qn) //nolint:errcheck // best-effort
+					fmt.Fprintf(stderr, "gc sling: agent %q not found in config\n", ref.qualifiedInstance) //nolint:errcheck // best-effort
+					return true
+				}
+				target := buildSlingNudgeTarget(member, cityName, cityPath, cfg, sessionStore, ref.sessionName)
+				deliverSlingNudge(target, sp, sessionStore, cityPath, stdout, stderr)
+				return true
+			}
+			return false
+		}
+		if tryNudgeStore(store) {
+			return
+		}
+		if cityPath != "" {
+			if _, statErr := os.Stat(filepath.Join(cityPath, "city.toml")); statErr == nil {
+				if cityStore, err := slingOpenCityStore(cityPath); err == nil && cityStore != nil && tryNudgeStore(cityStore) {
 					return
 				}
-				target := buildSlingNudgeTarget(member, cityName, cityPath, cfg, store, sn)
-				deliverSlingNudge(target, sp, store, cityPath, stdout, stderr)
-				return
 			}
 		}
 		// No running config session — poke controller for immediate wake.
@@ -1574,17 +1593,20 @@ func deliverSlingNudge(target nudgeTarget, sp runtime.Provider, store beads.Stor
 		}
 	}
 
-	if err := enqueueQueuedNudgeWithStore(target.cityPath, store, newQueuedNudge(target.agent.QualifiedName(), msg, "sling", now)); err != nil {
+	if err := enqueueQueuedNudgeWithStore(target.cityPath, store, newQueuedNudgeWithOptions(target.agent.QualifiedName(), msg, "sling", now, queuedNudgeOptionsFromTarget(target))); err != nil {
 		telemetry.RecordNudge(context.Background(), target.agent.QualifiedName(), err)
 		fmt.Fprintf(stderr, "gc sling: nudge failed: %v\n", err) //nolint:errcheck // best-effort
 		return
 	}
 	if running {
 		maybeStartNudgePoller(target)
-	} else if err := pokeController(cityPath); err != nil {
-		fmt.Fprintf(stderr, "Session %q is asleep; poke failed: %v\n", target.agent.QualifiedName(), err) //nolint:errcheck // best-effort
 	} else {
-		fmt.Fprintf(stdout, "Session %q is asleep — poked controller for wake\n", target.agent.QualifiedName()) //nolint:errcheck // best-effort
+		maybeStartNudgePoller(target)
+		if err := pokeController(cityPath); err != nil {
+			fmt.Fprintf(stderr, "Session %q is asleep; poke failed: %v\n", target.agent.QualifiedName(), err) //nolint:errcheck // best-effort
+		} else {
+			fmt.Fprintf(stdout, "Session %q is asleep — poked controller for wake\n", target.agent.QualifiedName()) //nolint:errcheck // best-effort
+		}
 	}
 	fmt.Fprintf(stdout, "Queued nudge for %s\n", target.agent.QualifiedName()) //nolint:errcheck // best-effort
 }

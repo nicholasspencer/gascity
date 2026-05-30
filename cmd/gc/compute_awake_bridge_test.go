@@ -103,6 +103,26 @@ func TestAwakeSetToWakeEvalsPreservesDecisionReason(t *testing.T) {
 	}
 }
 
+func TestAwakeSetToWakeEvalsMapsMinActiveToWakeConfig(t *testing.T) {
+	evals := awakeSetToWakeEvals(
+		map[string]AwakeDecision{
+			"s-worker": {ShouldWake: true, Reason: "min-active"},
+		},
+		[]AwakeSessionBead{{
+			ID:          "mc-session-1",
+			SessionName: "s-worker",
+		}},
+	)
+
+	got := evals["mc-session-1"]
+	if got.Reason != "min-active" {
+		t.Fatalf("Reason = %q, want min-active", got.Reason)
+	}
+	if !containsWakeReason(got.Reasons, WakeConfig) {
+		t.Fatalf("Reasons = %v, want WakeConfig", got.Reasons)
+	}
+}
+
 func TestBuildAwakeInputFromReconcilerCarriesNamedSessionDemand(t *testing.T) {
 	now := time.Now().UTC()
 	cfg := &config.City{
@@ -144,6 +164,59 @@ func TestBuildAwakeInputFromReconcilerCarriesNamedSessionDemand(t *testing.T) {
 	got := decisions["primary"]
 	if !got.ShouldWake || got.Reason != "named-demand" {
 		t.Fatalf("decision = %+v, want named-demand wake", got)
+	}
+}
+
+func TestBuildAwakeInputFromReconciler_RigNamedWorkQueryDemandWakesCanonicalSession(t *testing.T) {
+	now := time.Now().UTC()
+	cfg := &config.City{
+		ResolvedWorkspaceName: "gc-test",
+		Agents: []config.Agent{
+			{Name: "worker", Scope: "rig", WorkQuery: "echo 1"},
+		},
+		NamedSessions: []config.NamedSession{
+			{Name: "refinery", Template: "worker", Mode: "on_demand", Scope: "rig", Dir: "rig-a"},
+		},
+	}
+	identity := "rig-a/refinery"
+	runtimeName := config.NamedSessionRuntimeName(cfg.EffectiveCityName(), cfg.Workspace, identity)
+	sessionBead := beads.Bead{
+		ID:     "mc-session-1",
+		Status: "open",
+		Type:   "session",
+		Metadata: map[string]string{
+			"configured_named_session":  "true",
+			"state":                     "asleep",
+			"session_name":              runtimeName,
+			"template":                  "rig-a/worker",
+			"configured_named_identity": identity,
+			"configured_named_mode":     "on_demand",
+		},
+	}
+
+	input := buildAwakeInputFromReconciler(
+		cfg,
+		[]beads.Bead{sessionBead},
+		nil,
+		nil,
+		map[string]bool{"rig-a/worker": true},
+		nil,
+		nil,
+		nil,
+		runtime.NewFake(),
+		now,
+	)
+
+	decisions := ComputeAwakeSet(input)
+	got, ok := decisions[runtimeName]
+	if !ok {
+		t.Fatal("decision for rig named session missing from awake set")
+	}
+	if !got.ShouldWake {
+		t.Fatalf("decision = %+v, want wake", got)
+	}
+	if got.Reason != "work-query" {
+		t.Fatalf("Reason = %q, want work-query", got.Reason)
 	}
 }
 

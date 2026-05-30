@@ -78,6 +78,10 @@ func (c *DoltBackupCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.
+func (c *DoltLocalOnlyRemoteCheck) WarmupEligible() bool { return false }
+
+// WarmupEligible returns false; this check is not part of the
+// `gc start` warm-up scan.
 func (c *DoltVersionCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
@@ -106,6 +110,10 @@ func (c *NestedWorktreePruneCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.
+func (c *NamedAlwaysMinConflictCheck) WarmupEligible() bool { return false }
+
+// WarmupEligible returns false; this check is not part of the
+// `gc start` warm-up scan.
 func (c *OrderFiringCurrentCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
@@ -119,6 +127,10 @@ func (c *PackCacheCheck) WarmupEligible() bool { return false }
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.
 func (c *PreStartScriptsCheck) WarmupEligible() bool { return false }
+
+// WarmupEligible returns false; this check is not part of the
+// `gc start` warm-up scan.
+func (c *PostgresAuthCheck) WarmupEligible() bool { return false }
 
 // WarmupEligible returns false; this check is not part of the
 // `gc start` warm-up scan.
