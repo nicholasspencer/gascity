@@ -124,7 +124,7 @@ gc import add https://github.com/org/repo/tree/main/packs/review --name review
 # For uncommitted packs inside a git worktree, edit TOML directly:
 # [imports.review]
 # source = "/Users/you/shared-packs/packs/review"`,
-		Args:  cobra.ExactArgs(1),
+		Args: cobra.ExactArgs(1),
 		RunE: func(_ *cobra.Command, args []string) error {
 			cityPath, err := resolveImportRoot()
 			if err != nil {
