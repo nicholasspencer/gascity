@@ -837,6 +837,15 @@ func (i hqTierIndex) candidateIDs(q ListQuery) hqIDSet {
 	if q.Assignee != "" {
 		candidates = append(candidates, i.assignee[q.Assignee])
 	}
+	if len(q.Assignees) > 0 {
+		union := make(hqIDSet)
+		for _, assignee := range q.Assignees {
+			for id := range i.assignee[assignee] {
+				union[id] = struct{}{}
+			}
+		}
+		candidates = append(candidates, union)
+	}
 	if q.ParentID != "" {
 		candidates = append(candidates, i.parent[q.ParentID])
 	}
