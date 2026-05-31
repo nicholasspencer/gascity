@@ -1,12 +1,15 @@
 package beads_test
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"testing"
@@ -435,6 +438,159 @@ func TestHQStorePurgeExpired(t *testing.T) {
 	if _, err := store.Get(live.ID); err != nil {
 		t.Fatalf("Get live: %v", err)
 	}
+}
+
+func TestHQStorePurgeExpiredReadMessageRetention(t *testing.T) {
+	captureHQStoreLog(t)
+	store, err := beads.OpenHQStore(t.TempDir(),
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreMailRetentionTTL(time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Shutdown(); err != nil {
+			t.Errorf("Shutdown: %v", err)
+		}
+	})
+
+	old := time.Now().Add(-2 * time.Hour)
+	recent := time.Now().Add(-30 * time.Minute)
+	expiredRead := mustHQCreate(t, store, beads.Bead{
+		Title:     "old read message",
+		Type:      "message",
+		CreatedAt: old,
+		Ephemeral: true,
+		Metadata:  map[string]string{"mail.read": "true"},
+	})
+	retainedUnread := mustHQCreate(t, store, beads.Bead{
+		Title:     "old unread message",
+		Type:      "message",
+		CreatedAt: old,
+		Ephemeral: true,
+		Metadata:  map[string]string{"mail.read": "false"},
+	})
+	retainedUnset := mustHQCreate(t, store, beads.Bead{
+		Title:     "old unmarked message",
+		Type:      "message",
+		CreatedAt: old,
+		Ephemeral: true,
+	})
+	retainedNonMessage := mustHQCreate(t, store, beads.Bead{
+		Title:     "old read task",
+		Type:      "task",
+		CreatedAt: old,
+		Ephemeral: true,
+		Metadata:  map[string]string{"mail.read": "true"},
+	})
+	retainedRecent := mustHQCreate(t, store, beads.Bead{
+		Title:     "recent read message",
+		Type:      "message",
+		CreatedAt: recent,
+		Ephemeral: true,
+		Metadata:  map[string]string{"mail.read": "true"},
+	})
+
+	purged, err := store.PurgeExpired()
+	if err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	}
+	if purged != 1 {
+		t.Fatalf("PurgeExpired purged %d, want 1", purged)
+	}
+	if _, err := store.Get(expiredRead.ID); !errors.Is(err, beads.ErrNotFound) {
+		t.Fatalf("Get expired read error = %v, want ErrNotFound", err)
+	}
+	for _, retained := range []beads.Bead{retainedUnread, retainedUnset, retainedNonMessage, retainedRecent} {
+		if _, err := store.Get(retained.ID); err != nil {
+			t.Fatalf("Get retained %q: %v", retained.ID, err)
+		}
+	}
+}
+
+func TestHQStorePurgeExpiredMailRetentionZeroDisablesAndSuppressesLog(t *testing.T) {
+	logBuf := captureHQStoreLog(t)
+	store, err := beads.OpenHQStore(t.TempDir(),
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreMailRetentionTTL(0),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Shutdown(); err != nil {
+			t.Errorf("Shutdown: %v", err)
+		}
+	})
+
+	read := mustHQCreate(t, store, beads.Bead{
+		Title:     "old read message",
+		Type:      "message",
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+		Ephemeral: true,
+		Metadata:  map[string]string{"mail.read": "true"},
+	})
+
+	purged, err := store.PurgeExpired()
+	if err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	}
+	if purged != 0 {
+		t.Fatalf("PurgeExpired purged %d, want 0", purged)
+	}
+	if _, err := store.Get(read.ID); err != nil {
+		t.Fatalf("Get read: %v", err)
+	}
+	if got := logBuf.String(); got != "" {
+		t.Fatalf("log output = %q, want none", got)
+	}
+}
+
+func TestHQStorePurgeExpiredMailRetentionLogsCountAndTTL(t *testing.T) {
+	logBuf := captureHQStoreLog(t)
+	store, err := beads.OpenHQStore(t.TempDir(),
+		beads.WithHQStoreSnapshotInterval(0),
+		beads.WithHQStoreMailRetentionTTL(time.Hour),
+	)
+	if err != nil {
+		t.Fatalf("OpenHQStore: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := store.Shutdown(); err != nil {
+			t.Errorf("Shutdown: %v", err)
+		}
+	})
+	mustHQCreate(t, store, beads.Bead{
+		Title:     "old read message",
+		Type:      "message",
+		CreatedAt: time.Now().Add(-2 * time.Hour),
+		Ephemeral: true,
+		Metadata:  map[string]string{"mail.read": "true"},
+	})
+
+	if _, err := store.PurgeExpired(); err != nil {
+		t.Fatalf("PurgeExpired: %v", err)
+	}
+	got := logBuf.String()
+	want := "hqstore: purged 1 read message wisps (retention_ttl=1h)"
+	if !strings.Contains(got, want) {
+		t.Fatalf("log output = %q, want %q", got, want)
+	}
+}
+
+func captureHQStoreLog(t *testing.T) *bytes.Buffer {
+	t.Helper()
+	var buf bytes.Buffer
+	prev := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prev)
+		log.SetFlags(prevFlags)
+	})
+	return &buf
 }
 
 func TestHQStorePurgeExpiredRetainsOpenAndRecentClosedMainTier(t *testing.T) {

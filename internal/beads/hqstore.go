@@ -12,6 +12,7 @@ const (
 	hqExpiresAtMetadataKey = "expires_at"
 	hqExpiresAtMetadataAlt = "gc.expires_at"
 	hqClosedAtMetadataKey  = "gc.hqstore.closed_at"
+	hqMailReadMetadataKey  = "mail.read"
 
 	hqDefaultClosedTaskRetention = 7 * 24 * time.Hour
 )

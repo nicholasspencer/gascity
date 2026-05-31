@@ -1,6 +1,8 @@
 package beads
 
 import (
+	"fmt"
+	"log"
 	"time"
 )
 
@@ -22,16 +24,34 @@ func (s *HQStore) PurgeExpired() (int, error) {
 	}
 
 	var ids []string
+	seenIDs := make(map[string]bool)
+	addID := func(id string) bool {
+		if seenIDs[id] {
+			return false
+		}
+		seenIDs[id] = true
+		ids = append(ids, id)
+		return true
+	}
 	for id, bead := range s.wisps {
 		expiresAt, ok := hqBeadExpiresAt(bead)
 		if ok && !expiresAt.After(now) {
-			ids = append(ids, id)
+			addID(id)
+		}
+	}
+	mailPurged := 0
+	mailRetentionTTL := s.mailRetentionTTL
+	if mailRetentionTTL > 0 {
+		for id, bead := range s.wisps {
+			if hqReadMessageRetentionExpired(bead, now, mailRetentionTTL) && addID(id) {
+				mailPurged++
+			}
 		}
 	}
 	if s.closedTaskRetention > 0 {
 		for id, bead := range s.main {
 			if hqClosedTaskExpired(bead, now, s.closedTaskRetention) && !s.hasOpenChildrenLocked(id) {
-				ids = append(ids, id)
+				addID(id)
 			}
 		}
 	}
@@ -45,6 +65,9 @@ func (s *HQStore) PurgeExpired() (int, error) {
 	s.mu.Unlock()
 	if err := finish(purged > 0); err != nil {
 		return 0, err
+	}
+	if mailPurged > 0 {
+		log.Printf("hqstore: purged %d read message wisps (retention_ttl=%s)", mailPurged, hqRetentionTTLString(mailRetentionTTL))
 	}
 	return purged, nil
 }
@@ -81,6 +104,20 @@ func hqClosedTaskExpired(b Bead, now time.Time, retention time.Duration) bool {
 		return false
 	}
 	return !ref.Add(retention).After(now)
+}
+
+func hqReadMessageRetentionExpired(b Bead, now time.Time, retention time.Duration) bool {
+	if b.Type != "message" || b.Metadata[hqMailReadMetadataKey] != "true" || b.CreatedAt.IsZero() {
+		return false
+	}
+	return !b.CreatedAt.Add(retention).After(now)
+}
+
+func hqRetentionTTLString(d time.Duration) string {
+	if d > 0 && d%time.Hour == 0 {
+		return fmt.Sprintf("%dh", int64(d/time.Hour))
+	}
+	return d.String()
 }
 
 func (s *HQStore) hasOpenChildrenLocked(parentID string) bool {
