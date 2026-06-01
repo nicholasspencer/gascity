@@ -475,6 +475,37 @@ func TestDefaultScaleCheckCountsCountsUnassignedRoutedPoolWork(t *testing.T) {
 	}
 }
 
+func TestDefaultScaleCheckCountsIgnoresRunTargetOnlyPersistedWork(t *testing.T) {
+	const template = "gascity/reviewer"
+	backing := beads.NewMemStore()
+	if _, err := backing.Create(beads.Bead{
+		Title:  "legacy root missing routed_to",
+		Type:   "task",
+		Status: "open",
+		Metadata: map[string]string{
+			"gc.run_target": template,
+		},
+	}); err != nil {
+		t.Fatalf("create legacy bead: %v", err)
+	}
+	cache := beads.NewCachingStoreForTest(backing, nil)
+	if err := cache.PrimeActive(); err != nil {
+		t.Fatalf("PrimeActive: %v", err)
+	}
+
+	counts, _, errs := defaultScaleCheckCounts([]defaultScaleCheckTarget{{
+		template: template,
+		storeKey: "rig:gascity",
+		store:    cache,
+	}})
+	if len(errs) != 0 {
+		t.Fatalf("defaultScaleCheckCounts errs = %v", errs)
+	}
+	if got := counts[template]; got != 0 {
+		t.Fatalf("defaultScaleCheckCounts[%q] = %d, want 0 for run_target-only persisted work", template, got)
+	}
+}
+
 func TestDefaultScaleCheckCountsDoesNotTreatTemplateAssigneeAsDemand(t *testing.T) {
 	const template = "gascity/reviewer"
 	backing := beads.NewMemStore()
@@ -1122,6 +1153,68 @@ func TestDefaultScaleCheckCountsAndNamedDemandSharesReadyRead(t *testing.T) {
 	}
 	if !demand["primary"] {
 		t.Fatalf("demand[primary] = false, want true")
+	}
+}
+
+func TestDefaultScaleCheckCountsAndNamedDemandIgnoresRunTargetOnlyReadyWork(t *testing.T) {
+	store := &readyStaticStore{
+		Store: beads.NewMemStore(),
+		ready: []beads.Bead{
+			{
+				ID:     "legacy-pool-work",
+				Title:  "legacy pool work",
+				Type:   "task",
+				Status: "open",
+				Metadata: map[string]string{
+					"gc.run_target": "pool-worker",
+				},
+			},
+			{
+				ID:     "legacy-named-work",
+				Title:  "legacy named work",
+				Type:   "task",
+				Status: "open",
+				Metadata: map[string]string{
+					"gc.run_target": "worker",
+				},
+			},
+		},
+	}
+	cfg := &config.City{
+		Workspace: config.Workspace{Name: "test-city"},
+		Agents: []config.Agent{
+			{Name: "pool-worker"},
+			{Name: "worker"},
+		},
+		NamedSessions: []config.NamedSession{{
+			Name:     "primary",
+			Template: "worker",
+			Mode:     "on_demand",
+		}},
+	}
+
+	counts, _, poolErrs, demand, _, namedErrs := defaultScaleCheckCountsAndNamedDemand(
+		[]defaultScaleCheckTarget{{
+			template: "pool-worker",
+			storeKey: "city",
+			store:    store,
+		}},
+		[]defaultScaleCheckTarget{{
+			template: "worker",
+			storeKey: "city",
+			store:    store,
+		}},
+		cfg,
+		"test-city",
+	)
+	if len(poolErrs) != 0 || len(namedErrs) != 0 {
+		t.Fatalf("errs pool=%v named=%v, want none", poolErrs, namedErrs)
+	}
+	if got := counts["pool-worker"]; got != 0 {
+		t.Fatalf("counts[pool-worker] = %d, want 0 for run_target-only ready work", got)
+	}
+	if demand["primary"] {
+		t.Fatalf("demand[primary] = true, want false for run_target-only ready work")
 	}
 }
 

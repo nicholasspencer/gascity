@@ -170,6 +170,14 @@ ready work with `assignee=<named-session-identity>` and no generic route
 metadata, so the reconciler does not also treat the handoff as generic pool
 demand.
 
+Formula step metadata may use `gc.run_target` as an authoring hint for
+config/pool routing, but it is resolved to `gc.routed_to` before runtime
+demand/claim readers observe persisted beads. `gc.run_target` is not a
+pool-demand predicate and must not participate in `scale_check`,
+`work_query`, session wake, or API projection reads. Legacy persisted roots
+that still have `gc.run_target` without `gc.routed_to` are repaired by
+`gc doctor --fix` instead of reader fallback.
+
 The shared predicate is the agreement substrate. Failure envelopes
 intentionally differ: the worker path suppresses `bd ready` stderr and
 returns `[]` so a session exits cleanly, while the count form propagates

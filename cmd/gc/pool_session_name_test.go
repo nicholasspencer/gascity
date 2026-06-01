@@ -1459,6 +1459,28 @@ func TestStoreForPoolAssignment_UsesConfiguredHyphenatedIDPrefix(t *testing.T) {
 	}
 }
 
+func TestStoreForPoolAssignment_IgnoresRunTargetForStoreRouting(t *testing.T) {
+	cityStore := beads.NewMemStore()
+	rigStore := beads.NewMemStore()
+	cfg := &config.City{
+		Rigs: []config.Rig{{
+			Name: "pieces",
+			Path: t.TempDir(),
+		}},
+	}
+	work := beads.Bead{
+		ID: "gc-1",
+		Metadata: map[string]string{
+			"gc.run_target": "pieces/worker",
+		},
+	}
+
+	got := storeForPoolAssignment(cfg, cityStore, map[string]beads.Store{"pieces": rigStore}, work)
+	if got != cityStore {
+		t.Fatalf("storeForPoolAssignment() = %p, want city store %p for run_target-only persisted work", got, cityStore)
+	}
+}
+
 func TestReleaseOrphanedPoolAssignments_KeepsSameStoreScopedOpenSessionOwnership(t *testing.T) {
 	cityPath := t.TempDir()
 	store := beads.NewMemStore()

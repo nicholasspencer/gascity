@@ -248,8 +248,8 @@ func TestDecorateGraphWorkflowRecipe_SetsRootMetadata(t *testing.T) {
 		t.Fatalf("DecorateGraphWorkflowRecipe: %v", err)
 	}
 	root := r.Steps[0]
-	if root.Metadata["gc.run_target"] != "mayor" {
-		t.Errorf("root gc.run_target = %q, want mayor", root.Metadata["gc.run_target"])
+	if got := root.Metadata["gc.run_target"]; got != "" {
+		t.Errorf("root gc.run_target = %q, want empty; persisted roots route via gc.routed_to", got)
 	}
 	if root.Metadata["gc.source_bead_id"] != "src-1" {
 		t.Errorf("root gc.source_bead_id = %q, want src-1", root.Metadata["gc.source_bead_id"])
@@ -732,9 +732,8 @@ func TestWorkflowExecutionRouteFromMeta_PrefersExecutionKey(t *testing.T) {
 // TestStampLegacyRecipeRouting_RespectsPerStepRunTarget locks in the writer-side
 // invariant: a step that already declares a per-step gc.run_target must have
 // its gc.routed_to stamped to match that target, not the blanket convoy entry
-// agent. Without this, work_query-keyed readers (which still index gc.routed_to)
-// would resolve every child to the convoy entry, even after the reader-side
-// fallback honors gc.run_target. See PR #2386 + adaf6ec.
+// agent. Runtime readers only consult gc.routed_to, so authoring metadata must
+// be resolved before the recipe is persisted.
 func TestStampLegacyRecipeRouting_RespectsPerStepRunTarget(t *testing.T) {
 	recipe := &formula.Recipe{
 		Steps: []formula.RecipeStep{

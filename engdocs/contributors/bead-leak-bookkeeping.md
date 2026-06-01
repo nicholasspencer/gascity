@@ -79,6 +79,11 @@ could sit open until idle cleanup. Both graph workflow decorators now stamp
 copying `gc.run_target` to `gc.routed_to` when the canonical key is missing.
 The hook regression coverage now encodes that boundary: run-target-only roots
 are legacy repair candidates, not claimable work-query routes.
+The companion reader cleanup now removes `gc.run_target` fallback from runtime
+pool demand, named demand, pool assignment release, store selection, pool
+desired-state wake, and workflow-run API projection readers. The graph-v2 root
+decorators no longer persist `gc.run_target` on new workflow roots; they stamp
+only the canonical `gc.routed_to` delivery key.
 
 `TestGastownIdleOpenBeadCountsStayBounded` now runs in Tier B nightly
 acceptance. `.github/workflows/nightly.yml` schedules the Tier B job daily at
@@ -164,14 +169,23 @@ Dolt log. Unverified legacy markers still stop before any force-push.
 - `go test -tags acceptance_b -timeout 3m ./test/acceptance/tier_b -run 'Test(IdleBeadStabilityProbeConfigReadsNightlyOverrides|GastownIdleOpenBeadCountsStayBounded)$' -count=1`
   passed for the nightly idle-probe override parser and the default-duration
   idle stability probe.
-- `go test ./internal/graphroute -run 'TestDecorateGraphWorkflowRecipe_(RootStampsRoutedToForClaim|SetsRootMetadata)$' -count=1`
+- `go test ./internal/graphroute -run 'Test(DecorateGraphWorkflowRecipe_(SetsRootMetadata|RootStampsRoutedToForClaim)|StampLegacyRecipeRouting_RespectsPerStepRunTarget)$' -count=1`
   passed for graph workflow root route stamping.
-- `go test ./cmd/gc -run 'Test(RunTargetRoutedToBackfillCheck|InstantiateSlingFormulaGraphWorkflowPreservesRoutedTo|BatchOnGraphWorkflowStartsWorkflowWithoutRoutingChild|DoctorCheckNamesGolden|CmdHookIgnoresRunTargetOnlyRoot)$' -count=1`
-  passed for the sling-side route stamping and doctor backfill path.
+- `go test ./cmd/gc -run 'Test(BatchOnGraphWorkflowStartsWorkflowWithoutRoutingChild|DefaultScaleCheckCountsIgnoresRunTargetOnlyPersistedWork|DefaultScaleCheckCountsAndNamedDemandIgnoresRunTargetOnlyReadyWork|FilterAssignedWorkBeadsForPoolDemandIgnoresRunTargetOnlyWork|StoreForPoolAssignment_IgnoresRunTargetForStoreRouting|ComputePoolDesiredStates_IgnoresRunTargetOnlyWakeDemand|RunTargetRoutedToBackfillCheck|InstantiateSlingFormulaGraphWorkflowPreservesRoutedTo|DoctorCheckNamesGolden|CmdHookIgnoresRunTargetOnlyRoot)$' -count=1`
+  passed for the sling-side route stamping, doctor backfill path, hook
+  boundary, and routed_to-only runtime reader cleanup.
+- `go test ./internal/api -run TestWorkflowProjectionTargetIgnoresRunTarget -count=1`
+  passed for workflow-run API projection using the canonical delivery key.
+- `go test ./internal/api -count=1` passed after updating order-feed workflow
+  fixtures to use persisted `gc.routed_to`.
+- `go test ./internal/dispatch -count=1` passed, preserving compile-time
+  formula `gc.run_target` handling for fanout/control paths.
+- `make dashboard-check` passed; generated dashboard TypeScript schema/types
+  are in sync with the committed OpenAPI contract.
 - `go vet ./...` and `git diff --check` passed.
 - `.githooks/pre-commit` ran with `core.hooksPath=.githooks`; it failed in
   unrelated baseline `cmd/gc` shards. Latest log directory:
-  `/data/tmp/gc-local-tests.URxVf6`.
+  `/data/tmp/gc-local-tests.2j5mNP`.
 
 ## Remaining Work
 

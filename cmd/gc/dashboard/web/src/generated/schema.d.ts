@@ -2150,6 +2150,8 @@ export interface components {
         Bead: {
             assignee?: string;
             /** Format: date-time */
+            closed_at?: string;
+            /** Format: date-time */
             created_at: string;
             dependencies?: components["schemas"]["Dep"][] | null;
             description?: string;

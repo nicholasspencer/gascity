@@ -80,6 +80,27 @@ func TestFilterAssignedWorkBeadsForPoolDemandKeepsDirectAssigneeAfterTemplateFal
 	}
 }
 
+func TestFilterAssignedWorkBeadsForPoolDemandIgnoresRunTargetOnlyWork(t *testing.T) {
+	cfg := &config.City{
+		Agents: []config.Agent{{
+			Name: "worker",
+		}},
+	}
+	work := []beads.Bead{{
+		ID:     "legacy-run-target-only",
+		Status: "in_progress",
+		Metadata: map[string]string{
+			"gc.run_target": "worker",
+		},
+	}}
+
+	got := filterAssignedWorkBeadsForPoolDemand(cfg, "", nil, work, []string{""})
+
+	if len(got) != 0 {
+		t.Fatalf("filtered work = %#v, want run_target-only persisted work ignored", got)
+	}
+}
+
 func TestFilterAssignedWorkBeadsForPoolDemandDropsDirectAssigneeFromUnreachableStore(t *testing.T) {
 	cityPath := t.TempDir()
 	rigPath := filepath.Join(cityPath, "riga")

@@ -213,6 +213,24 @@ func TestComputePoolDesiredStates_ResumeResolvesAssigneeByAliasHistory(t *testin
 	}
 }
 
+func TestComputePoolDesiredStates_IgnoresRunTargetOnlyWakeDemand(t *testing.T) {
+	cfg := &config.City{
+		Agents: []config.Agent{poolAgent("claude", "rig", intPtr(2), 0)},
+	}
+	work := []beads.Bead{{
+		ID:       "legacy-run-target-only",
+		Status:   "in_progress",
+		Assignee: "rig/claude",
+		Metadata: map[string]string{"gc.run_target": "rig/claude"},
+	}}
+
+	result := ComputePoolDesiredStates(cfg, work, nil, nil)
+
+	if len(result) != 0 {
+		t.Fatalf("ComputePoolDesiredStates = %+v, want no wake demand for run_target-only persisted work", result)
+	}
+}
+
 func TestComputePoolDesiredStates_MaxCapsTotal(t *testing.T) {
 	cfg := &config.City{
 		Agents: []config.Agent{poolAgent("claude", "rig", intPtr(2), 0)},

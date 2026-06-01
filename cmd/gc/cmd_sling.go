@@ -1178,7 +1178,6 @@ func decorateGraphWorkflowRecipe(recipe *formula.Recipe, routeVars map[string]st
 			// sync: graph.v2 roots must persist the canonical claim key, not
 			// gc.run_target alone.
 			step.Metadata["gc.routed_to"] = routedTo
-			step.Metadata["gc.run_target"] = routedTo
 			continue
 		}
 		if sling.IsWorkflowTopologyKind(step.Metadata["gc.kind"]) {

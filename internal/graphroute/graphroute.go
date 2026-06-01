@@ -502,7 +502,6 @@ func DecorateGraphWorkflowRecipeWithDefaultBinding(recipe *formula.Recipe, route
 			// pool-routed root can be spawned-for by scale checks but never
 			// claimed by the worker, then idle-reaped.
 			step.Metadata["gc.routed_to"] = routedTo
-			step.Metadata["gc.run_target"] = routedTo
 			if sourceBeadID != "" {
 				step.Metadata["gc.source_bead_id"] = sourceBeadID
 				if rootStoreRef != "" {
@@ -595,11 +594,8 @@ func ApplyGraphRouting(recipe *formula.Recipe, a *config.Agent, routedTo string,
 //
 // Per-step gc.run_target wins: when a step already declares a target via
 // gc.run_target, the stamper uses that value for gc.routed_to instead of the
-// convoy-wide default. This keeps the two metadata keys in sync so the
-// gc.routed_to-keyed work_query path resolves to the same agent the
-// gc.run_target-aware reader path picks. Without this, the blanket routedTo
-// clobbers per-step targets and every child looks routed to the convoy entry
-// agent (see adaf6ec / PR #2386 reader fix).
+// convoy-wide default. gc.run_target is formula-authoring metadata; this
+// conversion is what lets persisted readers stay keyed only on gc.routed_to.
 func stampLegacyRecipeRouting(recipe *formula.Recipe, routedTo string) {
 	routedTo = strings.TrimSpace(routedTo)
 	if recipe == nil || routedTo == "" {

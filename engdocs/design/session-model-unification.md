@@ -536,6 +536,18 @@ Direct session-targeted writes set only:
 
 They do not also stamp `gc.routed_to`.
 
+### `gc.run_target`
+
+`gc.run_target` is formula-authoring metadata only. Graph and legacy recipe
+decorators may read it while compiling a recipe step and must resolve it into
+the persisted `gc.routed_to` delivery key before runtime readers see the bead.
+Runtime claim, scale, wake, release, store-selection, and API projection paths
+must not fall back to `gc.run_target`.
+
+Legacy persisted workflow roots that still contain `gc.run_target` without
+`gc.routed_to` are repair data, not a second routing contract. `gc doctor
+--fix` backfills `gc.routed_to` for that shape.
+
 ### `gc.routed_to`
 
 `gc.routed_to` is only for generic config-targeted execution and stores

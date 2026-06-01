@@ -255,6 +255,7 @@ export type AsyncAcceptedResponse = {
 
 export type Bead = {
     assignee?: string;
+    closed_at?: string;
     created_at: string;
     dependencies?: Array<Dep> | null;
     description?: string;

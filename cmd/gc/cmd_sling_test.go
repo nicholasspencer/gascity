@@ -4070,8 +4070,8 @@ title = "Do work"
 	if got := root.Status; got != "in_progress" {
 		t.Fatalf("root status = %q, want in_progress", got)
 	}
-	if got := root.Metadata["gc.run_target"]; got != "mayor" {
-		t.Fatalf("root gc.run_target = %q, want mayor", got)
+	if got := root.Metadata["gc.run_target"]; got != "" {
+		t.Fatalf("root gc.run_target = %q, want empty; persisted roots route via gc.routed_to", got)
 	}
 	if got := root.Metadata["gc.routed_to"]; got != "mayor" {
 		t.Fatalf("root gc.routed_to = %q, want mayor", got)

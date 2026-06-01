@@ -49,6 +49,19 @@ func TestOrderTrackingExecEnvFailedClassifiesAsFailedExec(t *testing.T) {
 	}
 }
 
+func TestWorkflowProjectionTargetIgnoresRunTarget(t *testing.T) {
+	root := beads.Bead{
+		Metadata: map[string]string{
+			"gc.run_target": "legacy-authoring-target",
+			"gc.routed_to":  "worker",
+		},
+	}
+
+	if got := workflowProjectionTarget(root); got != "worker" {
+		t.Fatalf("workflowProjectionTarget = %q, want worker from gc.routed_to", got)
+	}
+}
+
 func TestOrderTrackingTriggerEnvFailedClassifiesOpenAndClosedAsFailed(t *testing.T) {
 	for _, status := range []string{"open", "closed"} {
 		t.Run(status, func(t *testing.T) {
