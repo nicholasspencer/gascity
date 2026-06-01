@@ -243,7 +243,12 @@ type packRegistryReleaseJSON struct {
 }
 
 func doPackRegistryList(jsonOutput bool, stdout, stderr io.Writer) int {
-	cfg, err := packregistry.LoadConfig(gchome.Default())
+	home := gchome.Default()
+	if err := packregistry.EnsureDefaultRegistryConfig(home); err != nil {
+		fmt.Fprintf(stderr, "gc pack registry list: %v\n", err) //nolint:errcheck
+		return 1
+	}
+	cfg, err := packregistry.LoadConfig(home)
 	if err != nil {
 		fmt.Fprintf(stderr, "gc pack registry list: %v\n", err) //nolint:errcheck
 		return 1
@@ -290,6 +295,12 @@ func doPackRegistryAdd(name, source string, noValidate, jsonOutput bool, stdout,
 		}
 		catalogData = data
 	}
+	if name != packregistry.DefaultRegistryName {
+		if err := packregistry.EnsureDefaultRegistryConfig(home); err != nil {
+			fmt.Fprintf(stderr, "gc pack registry add: %v\n", err) //nolint:errcheck
+			return 1
+		}
+	}
 	if err := packregistry.AddRegistryWithCache(home, reg, catalogData); err != nil {
 		fmt.Fprintf(stderr, "gc pack registry add: %v\n", err) //nolint:errcheck
 		return 1
@@ -313,6 +324,16 @@ func doPackRegistryAdd(name, source string, noValidate, jsonOutput bool, stdout,
 
 func doPackRegistryRemove(name string, jsonOutput bool, stdout, stderr io.Writer) int {
 	home := gchome.Default()
+	if err := packregistry.ValidateRegistryName(name); err != nil {
+		fmt.Fprintf(stderr, "gc pack registry remove: %v\n", err) //nolint:errcheck
+		return 1
+	}
+	if name == packregistry.DefaultRegistryName {
+		if err := packregistry.EnsureDefaultRegistryConfig(home); err != nil {
+			fmt.Fprintf(stderr, "gc pack registry remove: %v\n", err) //nolint:errcheck
+			return 1
+		}
+	}
 	removed, err := packregistry.RemoveRegistry(home, name)
 	if err != nil {
 		fmt.Fprintf(stderr, "gc pack registry remove: %v\n", err) //nolint:errcheck
@@ -339,6 +360,10 @@ func doPackRegistryRemove(name string, jsonOutput bool, stdout, stderr io.Writer
 
 func doPackRegistryRefresh(name string, jsonOutput bool, stdout, stderr io.Writer) int {
 	home := gchome.Default()
+	if err := packregistry.EnsureDefaultRegistryConfig(home); err != nil {
+		fmt.Fprintf(stderr, "gc pack registry refresh: %v\n", err) //nolint:errcheck
+		return 1
+	}
 	cfg, err := packregistry.LoadConfig(home)
 	if err != nil {
 		fmt.Fprintf(stderr, "gc pack registry refresh: %v\n", err) //nolint:errcheck
@@ -414,6 +439,10 @@ type registrySearchResult struct {
 
 func doPackRegistrySearch(query, registry string, refresh bool, limit int, all bool, jsonOutput bool, stdout, stderr io.Writer) int {
 	home := gchome.Default()
+	if err := packregistry.EnsureDefaultRegistryConfig(home); err != nil {
+		fmt.Fprintf(stderr, "gc pack registry search: %v\n", err) //nolint:errcheck
+		return 1
+	}
 	cfg, err := packregistry.LoadConfig(home)
 	if err != nil {
 		fmt.Fprintf(stderr, "gc pack registry search: %v\n", err) //nolint:errcheck
@@ -519,6 +548,10 @@ func doPackRegistrySearch(query, registry string, refresh bool, limit int, all b
 
 func doPackRegistryShow(target string, refresh bool, jsonOutput bool, stdout, stderr io.Writer) int {
 	home := gchome.Default()
+	if err := packregistry.EnsureDefaultRegistryConfig(home); err != nil {
+		fmt.Fprintf(stderr, "gc pack registry show: %v\n", err) //nolint:errcheck
+		return 1
+	}
 	cfg, err := packregistry.LoadConfig(home)
 	if err != nil {
 		fmt.Fprintf(stderr, "gc pack registry show: %v\n", err) //nolint:errcheck
