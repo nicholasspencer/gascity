@@ -397,6 +397,15 @@ session aliases already covered by the session row (`adoption_barrier`,
 - Branch reaper dry-run on the same live server after the stale-only alert
   patch reported `stale_wisps:115`, `mail_wisps:134`, `would_close_wisps:0`,
   and made no escalation mail call with `GC_REAPER_ALERT_THRESHOLD=500`.
+- Branch reaper dry-run after the guarded stale workflow-root cleanup patch
+  ran on 2026-06-01T13:37:24Z against the same live server with explicit
+  `GC_DOLT_PORT=3307`. Direct read-only SQL found zero guarded workflow-root
+  candidates in `ga`, `mc`, `gt`, `my_db`, `bd`, `gp`, `gg`, and `rig`; the
+  script dry-run matched that with `stale_wisps:115`, `mail_wisps:156`, and
+  `would_close_wisps:0`. Raw `status='open'` counts were still `ga=619` and
+  `mc=730`, while stale non-message counts stayed bounded at `ga=13` and
+  `mc=24`. No live reaper mutation was run because the new root path had no
+  safe candidates to close.
 - Dolt compaction remains blocked for `mc` by
   `/data/projects/maintainer-city/.gc/runtime/packs/dolt/compact-quarantine/mc`
   (`post-flatten value hash changed without row-count increase`,
@@ -461,3 +470,15 @@ session aliases already covered by the session row (`adoption_barrier`,
   `2od9635iqrpmfvs92gthl4bftgacr28j`. Local Dolt storage dropped to about
   `1.2G` total, with `ga=521M` and `mc=516M`; no `.dolt/git-remote-cache`
   directories remained.
+- Current Dolt retention dry-run on 2026-06-01T13:37:24Z used the branch
+  compactor with `GC_DOLT_COMPACT_ONLY_DBS=ga,mc`,
+  `GC_DOLT_DATA_DIR=/data/services/gascity-local-dolt`, explicit loopback
+  `127.0.0.1:3307`, and `GC_PACK_DIR` pinned to the branch Dolt pack. It
+  reached both remaining guardrails and stopped without mutation:
+  `mc` still has the integrity quarantine marker from
+  `2026-05-20T11:14:29Z`, and `ga` still has the upgraded pending-push marker
+  from `2026-05-16T18:03:26Z`, now rejected as stale by the marker age guard
+  before any remote push retry. Current local Dolt storage was about `1.4G`
+  total (`ga=653M`, `mc=545M`, `gt=33M`, `bd=34M`, `gp=50M`,
+  `my_db=59M`). These are explicit manual-review blockers, not remaining
+  compactor code paths.
