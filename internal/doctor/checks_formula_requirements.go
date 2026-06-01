@@ -8,6 +8,7 @@ import (
 
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/formula"
+	"github.com/gastownhall/gascity/internal/pathutil"
 )
 
 // FormulaRequirementsCheck reports formula compiler requirement migration and
@@ -67,6 +68,15 @@ func (c *FormulaRequirementsCheck) Fix(_ *CheckContext) error { return nil }
 
 func (c *FormulaRequirementsCheck) collectIssues() []formulaRequirementIssue {
 	var issues []formulaRequirementIssue
+	seen := make(map[formulaRequirementIssueKey]struct{})
+	addIssue := func(issue formulaRequirementIssue) {
+		key := issue.dedupeKey()
+		if _, ok := seen[key]; ok {
+			return
+		}
+		seen[key] = struct{}{}
+		issues = append(issues, issue)
+	}
 	src := formula.SourceFromEnv()
 	for _, scope := range c.formulaScopes() {
 		parser := formula.NewParser(scope.paths...).SetSource(src)
@@ -80,7 +90,7 @@ func (c *FormulaRequirementsCheck) collectIssues() []formulaRequirementIssue {
 			path := winners[name]
 			f, err := parser.ParseFile(path)
 			if err != nil {
-				issues = append(issues, formulaRequirementIssue{
+				addIssue(formulaRequirementIssue{
 					severity: StatusError,
 					scope:    scope.name,
 					formula:  name,
@@ -90,7 +100,7 @@ func (c *FormulaRequirementsCheck) collectIssues() []formulaRequirementIssue {
 				continue
 			}
 			if strings.EqualFold(strings.TrimSpace(f.Contract), "graph.v2") {
-				issues = append(issues, formulaRequirementIssue{
+				addIssue(formulaRequirementIssue{
 					severity: StatusWarning,
 					scope:    scope.name,
 					formula:  f.Formula,
@@ -100,7 +110,7 @@ func (c *FormulaRequirementsCheck) collectIssues() []formulaRequirementIssue {
 			}
 			resolved, err := parser.Resolve(f)
 			if err != nil {
-				issues = append(issues, formulaRequirementIssue{
+				addIssue(formulaRequirementIssue{
 					severity: StatusError,
 					scope:    scope.name,
 					formula:  f.Formula,
@@ -110,7 +120,7 @@ func (c *FormulaRequirementsCheck) collectIssues() []formulaRequirementIssue {
 				continue
 			}
 			if err := formula.ValidateExplicitGraphCompilerRequirement(resolved); err != nil {
-				issues = append(issues, formulaRequirementIssue{
+				addIssue(formulaRequirementIssue{
 					severity: StatusError,
 					scope:    scope.name,
 					formula:  resolved.Formula,
@@ -119,7 +129,7 @@ func (c *FormulaRequirementsCheck) collectIssues() []formulaRequirementIssue {
 				})
 			}
 			if err := formula.ValidateHostRequirements(resolved, c.cfg.Daemon.FormulaV2); err != nil {
-				issues = append(issues, formulaRequirementIssue{
+				addIssue(formulaRequirementIssue{
 					severity: StatusError,
 					scope:    scope.name,
 					formula:  resolved.Formula,
@@ -163,6 +173,22 @@ type formulaRequirementIssue struct {
 	formula  string
 	path     string
 	message  string
+}
+
+type formulaRequirementIssueKey struct {
+	severity CheckStatus
+	formula  string
+	path     string
+	message  string
+}
+
+func (i formulaRequirementIssue) dedupeKey() formulaRequirementIssueKey {
+	return formulaRequirementIssueKey{
+		severity: i.severity,
+		formula:  i.formula,
+		path:     pathutil.NormalizePathForCompare(i.path),
+		message:  i.message,
+	}
 }
 
 func (i formulaRequirementIssue) detail() string {
