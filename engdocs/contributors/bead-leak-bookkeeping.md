@@ -164,6 +164,13 @@ storage even if the remote repair remains blocked, while still avoiding another
 flatten and preserving the pending-push marker until a remote fetch/push
 succeeds.
 
+When a preserved/rebuilt `.dolt/git-remote-cache` directory is missing the bare
+`repo.git` expected by Dolt during `DOLT_FETCH`, the compactor now initializes
+that bare repo only when the error path resolves under the database's
+`git-remote-cache` root, then retries the fetch once. This keeps pending remote
+repair recoverable after cache-only cleanup removes a stale cache directory, but
+still refuses to create arbitrary paths from a malformed error message.
+
 ## Creation Paths
 
 | Path | Beads opened | Bookkeeping owner |
@@ -186,7 +193,7 @@ succeeds.
 | `cmd/gc/wisp_gc.go` / `wisp autoclose` | Close attached workflow roots and owned workflow beads from CLI-driven cleanup. Purge expired closed wisps, order-tracking beads, and closed graph-v2 workflow-root closures. | Patched to include workflow-root closure GC through indexed metadata queries guarded by `sourceworkflow.IsWorkflowRoot`. |
 | `cmd/gc/order_dispatch.go` | Close order-tracking beads after dispatch attempt completion. | Existing defer is the primary owner; stale tracking-bead bugs should be treated as order-dispatch defects. |
 | `cmd/gc/doctor_run_target_backfill.go` | Mechanical repair for workflow roots with `gc.run_target` but missing `gc.routed_to`. | New `gc doctor --fix` check backfills the canonical claim key without touching non-workflow beads or already-routed roots. |
-| `examples/dolt/commands/compact/run.sh` | Bound Dolt storage by flattening high-commit databases, running full GC, retrying safe pending-push/pending-GC markers, and pruning rebuildable `.dolt/git-remote-cache` directories. | Patched so remote-cache cleanup runs before commit-count skips and before blocking quarantine markers, while preserving the cache during pending remote repair retries; pending-push retry runs local full GC when oldgen archives are present; dry-run reports exact cache and local-GC actions; cache-only mode reclaims cache bloat without retrying pending remote pushes. |
+| `examples/dolt/commands/compact/run.sh` | Bound Dolt storage by flattening high-commit databases, running full GC, retrying safe pending-push/pending-GC markers, and pruning rebuildable `.dolt/git-remote-cache` directories. | Patched so remote-cache cleanup runs before commit-count skips and before blocking quarantine markers, while preserving the cache during pending remote repair retries; pending-push retry runs local full GC when oldgen archives are present; missing bare remote-cache repos are initialized and fetched once when the path is safely under `.dolt/git-remote-cache`; dry-run reports exact cache and local-GC actions; cache-only mode reclaims cache bloat without retrying pending remote pushes. |
 
 ## Verification Snapshot
 
@@ -218,6 +225,14 @@ succeeds.
   skipped full GC and left oldgen archives in place; it passed after the retry
   path reclaimed oldgen without flattening again and kept the marker when remote
   fetch still failed.
+- `go test ./examples/dolt -run 'TestCompactScriptRepairsMissingGitRemoteCacheBeforePendingPushRetry$' -count=1`
+  failed before the missing-cache repair because `DOLT_FETCH` could not open
+  the expected `repo.git` under `.dolt/git-remote-cache`; it passed after the
+  compactor initialized that bare cache repo, retried fetch, pushed the
+  compacted branch, and cleared the pending-push marker.
+- `go test ./examples/dolt -run 'TestCompactScript(RepairsMissingGitRemoteCacheBeforePendingPushRetry|PreservesRemoteCacheBeforePendingPushRetry|RunsLocalFullGCBeforePendingPushRetry|RemoteCacheOnlySkipsPendingPushRetry)$' -count=1`
+  passed for the combined pending-push retry/cache-preservation/local-GC/cache-only
+  regression set.
 - `go test -tags acceptance_b -timeout 10m -v ./test/acceptance/tier_b -run TestGastownIdleOpenBeadCountsStayBounded`
   passed on 2026-06-01, proving the idle Gastown regression itself against the
   current branch. Nightly coverage is wired through
@@ -245,10 +260,17 @@ succeeds.
   formula `gc.run_target` handling for fanout/control paths.
 - `make dashboard-check` passed; generated dashboard TypeScript schema/types
   are in sync with the committed OpenAPI contract.
-- `go vet ./...` and `git diff --check` passed.
-- `.githooks/pre-commit` ran with `core.hooksPath=.githooks`; it failed in
-  unrelated baseline `cmd/gc` shards. Latest log directory:
-  `/data/tmp/gc-local-tests.fUVGF1`.
+- `sh -n examples/dolt/commands/compact/run.sh`, `go vet ./...`, and
+  `git diff --check` passed.
+- `make test-fast-parallel` ran on 2026-06-01; `unit-core`, `cmd/gc` shards
+  4/5/6, and the Darwin compile shard passed, while unrelated baseline
+  `cmd/gc` shards 1/2/3 failed. Log directory:
+  `/data/tmp/gc-local-tests.RbtpHf`.
+- `.githooks/pre-commit` ran with `core.hooksPath=.githooks`; lint-changed,
+  generated docs/schema checks, `go vet ./...`, `unit-core`, `cmd/gc` shards
+  4/5/6, and the Darwin compile shard passed, while the same unrelated
+  baseline `cmd/gc` shards 1/2/3 failed. Latest log directory:
+  `/data/tmp/gc-local-tests.wPQf5Q`.
 
 ## Remaining Work
 
