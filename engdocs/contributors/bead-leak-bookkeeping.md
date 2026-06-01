@@ -76,6 +76,15 @@ control kinds, still quarantine. If `ProcessControl` already terminally closed
 the bead with `gc.final_disposition=controller_error`, the wrapper preserves
 that disposition instead of re-closing the bead as `control_quarantined`.
 
+`ga-m9zak` identified that the control-dispatcher serve loop could treat
+permanently unadvanceable control work as genuine idle. A non-control bead in
+the control work query was skipped before the normal dispatcher could quarantine
+it, and a legacy oversized attempt-log error was counted and returned as nil
+once the queue contained only that stranded item. The serve loop now sends every
+queued bead to the dispatcher so unsupported kinds use the existing
+`control_quarantined` disposition, and legacy oversized attempt-log failures
+surface as command errors instead of being silently folded into idle backoff.
+
 `ga-eld2x` identified a persisted route-key leak for graph-v2 workflow roots.
 The authoring key `gc.run_target` is useful inside formulas, but the runtime
 claim path reads the persisted delivery key `gc.routed_to`. Before this patch,
@@ -177,6 +186,7 @@ still refuses to create arbitrary paths from a malformed error message.
 | --- | --- | --- |
 | `internal/molecule/graph_apply.go` graph workflow instantiation | Wisp root plus logical/step wisps. Non-root graph steps are linked to the root with `tracks`; explicit ordering uses `blocks`; legacy containment uses `parent-child`. | Normal workflow execution closes runnable steps. `molecule.CloseSubtree` closes owned descendants during explicit cleanup. `reaper.sh` now closes stale leftovers when all reaper-owned dependency targets are closed. |
 | `cmd/gc/order_dispatch.go` order dispatch | Ephemeral order-tracking bead labeled `gc:order-tracking`; wisp orders also create a molecule/wisp root via `molecule.Instantiate`. | `dispatchOne` defers `closeOrderTrackingBead`. Wisp roots are intentionally not auto-closed solely because descendants finish; the reaper handles stale roots/steps only when dependency evidence proves closure is safe. |
+| `cmd/gc/dispatch_runtime.go` control-dispatcher serve loop | Graph-v2 control beads such as `check`, `drain`, `fanout`, `retry`, `retry-eval`, `scope-check`, and `workflow-finalize` drive workflow progression and may appear in the controller work query. | Routed control work now always reaches `runControlDispatcherWithStoreAndConfig`. Unsupported or misrouted kinds are quarantined with explicit `gc.control_quarantined` metadata; legacy oversized attempt-log failures return a visible serve error instead of masquerading as idle. |
 | `examples/gastown/packs/gastown/formulas/mol-deacon-patrol.toml` patrol loop | One root-only deacon patrol wisp per cycle. Each cycle pours the next patrol wisp and assigns it to the same deacon session. | Version 15 burns the current patrol wisp before the backoff sleep, then re-enters `gc hook` after sleeping. This keeps at most the successor wisp open across the backoff window. |
 | Graph-v2 routing decorators in `internal/graphroute/graphroute.go` and `cmd/gc/cmd_sling.go` | Workflow roots plus routed child steps. `gc.run_target` remains a formula-authoring hint; `gc.routed_to` is the persisted claim key. | Patched roots now persist `gc.routed_to` so the runtime claim path can see them. Existing roots can be backfilled by `gc doctor --fix` through `run-target-routed-to-backfill`. |
 | `cmd/gc/bead_policy_store.go` storage policy wrapper | Applies default ephemeral storage to wisp/order-tracking policies and no-history storage to session/wait/nudge policies. | Policy only selects storage tier; lifecycle is owned by the creating subsystem and maintenance scripts. |
@@ -191,6 +201,7 @@ still refuses to create arbitrary paths from a malformed error message.
 | `examples/gastown/packs/maintenance/assets/scripts/wisp-compact.sh` | Promote old non-closed ephemeral beads for stuck detection and delete expired closed wisps. | Still separate from the safe-close decision. It must not become an age-only closer. |
 | `internal/molecule/cleanup.go` | Close molecule subtrees by ownership metadata and parent-child descendants. | Handles explicit teardown, not abandoned workflow drift. |
 | `cmd/gc/wisp_gc.go` / `wisp autoclose` | Close attached workflow roots and owned workflow beads from CLI-driven cleanup. Purge expired closed wisps, order-tracking beads, and closed graph-v2 workflow-root closures. | Patched to include workflow-root closure GC through indexed metadata queries guarded by `sourceworkflow.IsWorkflowRoot`. |
+| `cmd/gc/dispatch_runtime.go` / `cmd/gc/cmd_convoy_dispatch.go` | Drain and execute graph-v2 control beads claimed by the control dispatcher. | The serve loop no longer pre-skips unexpected `gc.kind` values or suppresses legacy oversized attempt-log errors. Unexpected queued beads flow into the existing hard-error quarantine path, and oversized attempt-log errors stop the command with a named cause. |
 | `cmd/gc/order_dispatch.go` | Close order-tracking beads after dispatch attempt completion. | Existing defer is the primary owner; stale tracking-bead bugs should be treated as order-dispatch defects. |
 | `cmd/gc/doctor_run_target_backfill.go` | Mechanical repair for workflow roots with `gc.run_target` but missing `gc.routed_to`. | New `gc doctor --fix` check backfills the canonical claim key without touching non-workflow beads or already-routed roots. |
 | `examples/dolt/commands/compact/run.sh` | Bound Dolt storage by flattening high-commit databases, running full GC, retrying safe pending-push/pending-GC markers, and pruning rebuildable `.dolt/git-remote-cache` directories. | Patched so remote-cache cleanup runs before commit-count skips and before blocking quarantine markers, while preserving the cache during pending remote repair retries; pending-push retry runs local full GC when oldgen archives are present; missing bare remote-cache repos are initialized and fetched once when the path is safely under `.dolt/git-remote-cache`; dry-run reports exact cache and local-GC actions; cache-only mode reclaims cache bloat without retrying pending remote pushes. |
@@ -247,6 +258,13 @@ still refuses to create arbitrary paths from a malformed error message.
 - `go test ./cmd/gc -run 'Test(BatchOnGraphWorkflowStartsWorkflowWithoutRoutingChild|DefaultScaleCheckCountsIgnoresRunTargetOnlyPersistedWork|DefaultScaleCheckCountsAndNamedDemandIgnoresRunTargetOnlyReadyWork|FilterAssignedWorkBeadsForPoolDemandIgnoresRunTargetOnlyWork|StoreForPoolAssignment_IgnoresRunTargetForStoreRouting|ComputePoolDesiredStates_IgnoresRunTargetOnlyWakeDemand|RunTargetRoutedToBackfillCheck|InstantiateSlingFormulaGraphWorkflowPreservesRoutedTo|DoctorCheckNamesGolden|CmdHookIgnoresRunTargetOnlyRoot)$' -count=1`
   passed for the sling-side route stamping, doctor backfill path, hook
   boundary, and routed_to-only runtime reader cleanup.
+- `go test ./cmd/gc -run 'TestRunWorkflowServe(DispatchesUnexpectedNonControlBeadAndProcessesLaterReady|DispatchesUnexpectedNonControlOnly|QuarantinesUnexpectedNonControlBead|ReturnsLegacyOversizedControlError)$' -count=1`
+  failed before the serve-loop stranding patch because unexpected queued beads
+  were skipped and legacy oversized attempt-log errors returned nil; it passed
+  after unexpected beads were dispatched/quarantined and oversized errors
+  surfaced.
+- `go test ./cmd/gc -run 'TestRunWorkflowServe' -count=1` passed for the
+  broader control-dispatcher serve-loop regression set.
 - Live route-key verification on 2026-06-01T11:13:41Z found `0` workflow roots
   with `gc.run_target` and missing `gc.routed_to` across `bd`, `ga`, `gg`,
   `gp`, `gt`, `mc`, `my_db`, and `rig`. Before repair, `ga` had `139` such
@@ -263,14 +281,16 @@ still refuses to create arbitrary paths from a malformed error message.
 - `sh -n examples/dolt/commands/compact/run.sh`, `go vet ./...`, and
   `git diff --check` passed.
 - `make test-fast-parallel` ran on 2026-06-01; `unit-core`, `cmd/gc` shards
-  4/5/6, and the Darwin compile shard passed, while unrelated baseline
-  `cmd/gc` shards 1/2/3 failed. Log directory:
-  `/data/tmp/gc-local-tests.RbtpHf`.
+  1/5/6, and the Darwin compile shard passed, while unrelated baseline
+  `cmd/gc` shards 2/3/4 failed. The shard containing the new serve-loop tests
+  did not fail those tests; its failure was the existing
+  `TestCmdSlingDefaultFormulaDoesNotMaterializePoolSession` baseline. Log
+  directory: `/data/tmp/gc-local-tests.SRvfiG`.
 - `.githooks/pre-commit` ran with `core.hooksPath=.githooks`; lint-changed,
   generated docs/schema checks, `go vet ./...`, `unit-core`, `cmd/gc` shards
-  4/5/6, and the Darwin compile shard passed, while the same unrelated
-  baseline `cmd/gc` shards 1/2/3 failed. Latest log directory:
-  `/data/tmp/gc-local-tests.wPQf5Q`.
+  1/5/6, and the Darwin compile shard passed, while the same unrelated
+  baseline `cmd/gc` shards 2/3/4 failed. Latest log directory:
+  `/data/tmp/gc-local-tests.hWuigJ`.
 
 ## Remaining Work
 
