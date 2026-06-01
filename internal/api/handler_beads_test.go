@@ -472,6 +472,48 @@ func TestBeadCRUD(t *testing.T) {
 	}
 }
 
+func TestBeadClosePersistsReasonMetadata(t *testing.T) {
+	state := newFakeState(t)
+	h := newTestCityHandler(t, state)
+
+	body := `{"rig":"myrig","title":"Duplicate task","type":"task"}`
+	req := newPostRequest(cityURL(state, "/beads"), bytes.NewBufferString(body))
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusCreated {
+		t.Fatalf("create status = %d, want %d, body: %s", rec.Code, http.StatusCreated, rec.Body.String())
+	}
+
+	var created beads.Bead
+	json.NewDecoder(rec.Body).Decode(&created) //nolint:errcheck
+
+	req = newPostRequest(
+		cityURL(state, "/bead/")+created.ID+"/close",
+		bytes.NewBufferString(`{"reason":"operator verified duplicate"}`),
+	)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("close status = %d, want %d, body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	req = httptest.NewRequest("GET", cityURL(state, "/bead/")+created.ID, nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("get status = %d, want %d, body: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var got beads.Bead
+	json.NewDecoder(rec.Body).Decode(&got) //nolint:errcheck
+	if got.Status != "closed" {
+		t.Errorf("Status = %q, want %q", got.Status, "closed")
+	}
+	if got.Metadata["close_reason"] != "operator verified duplicate" {
+		t.Errorf("Metadata[close_reason] = %q, want %q", got.Metadata["close_reason"], "operator verified duplicate")
+	}
+}
+
 type laggyParentProjectionStore struct {
 	beads.Store
 	pendingChildren map[string]string

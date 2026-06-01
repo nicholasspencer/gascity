@@ -69,7 +69,12 @@ type BeadCreateInput struct {
 // BeadCloseInput is the Huma input for POST /v0/city/{cityName}/bead/{id}/close.
 type BeadCloseInput struct {
 	CityScope
-	ID string `path:"id" doc:"Bead ID."`
+	ID   string `path:"id" doc:"Bead ID."`
+	Body *beadCloseBody
+}
+
+type beadCloseBody struct {
+	Reason string `json:"reason,omitempty" doc:"Operator-readable reason to persist as metadata.close_reason." maxLength:"1024"`
 }
 
 // BeadReopenInput is the Huma input for POST /v0/city/{cityName}/bead/{id}/reopen.

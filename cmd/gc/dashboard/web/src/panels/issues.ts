@@ -361,7 +361,7 @@ function actionButton(label: string, klass: string, onClick: () => void): HTMLEl
   return button;
 }
 
-function prioritySelect(issueID: string, current: number | undefined): HTMLElement {
+function prioritySelect(issueID: string, current: number | null | undefined): HTMLElement {
   const select = el("select", { class: "issue-action-select", id: "issue-action-priority", "aria-label": "Priority" }) as HTMLSelectElement;
   [1, 2, 3, 4].forEach((priority) => {
     const option = el("option", { value: priority, selected: beadPriority(current) === priority }, [`P${priority}`]) as HTMLOptionElement;

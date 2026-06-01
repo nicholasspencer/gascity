@@ -54,6 +54,8 @@ func (sm *SupervisorMux) registerCityRoutes() {
 	cityGet(sm, "/agents", (*Server).humaHandleAgentList)
 	cityGet(sm, "/agent/{dir}/{base}/output", (*Server).humaHandleAgentOutputQualified)
 	cityGet(sm, "/agent/{base}/output", (*Server).humaHandleAgentOutput)
+	cityGet(sm, "/agent/{dir}/{base}/prime", (*Server).humaHandleAgentPrimeQualified)
+	cityGet(sm, "/agent/{base}/prime", (*Server).humaHandleAgentPrime)
 	cityGet(sm, "/agent/{dir}/{base}", (*Server).humaHandleAgentQualified)
 	cityGet(sm, "/agent/{base}", (*Server).humaHandleAgent)
 	cityRegister(sm, huma.Operation{

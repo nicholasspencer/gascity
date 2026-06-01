@@ -129,6 +129,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/v0/city/{cityName}/agent/{base}/prime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get v0 city by city name agent by base prime */
+        get: operations["get-v0-city-by-city-name-agent-by-base-prime"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/v0/city/{cityName}/agent/{base}/{action}": {
         parameters: {
             query?: never;
@@ -194,6 +211,23 @@ export interface paths {
          * @description Server-Sent Events stream of agent output for qualified (rig-prefixed) agent names.
          */
         get: operations["stream-agent-output-qualified"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/v0/city/{cityName}/agent/{dir}/{base}/prime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get v0 city by city name agent by dir by base prime */
+        get: operations["get-v0-city-by-city-name-agent-by-dir-by-base-prime"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2066,6 +2100,17 @@ export interface components {
             /** @description Override session working directory. */
             work_dir?: string;
         };
+        AgentPrimeBody: {
+            /** @description Resolved agent identity. */
+            agent: string;
+            /**
+             * Format: int64
+             * @description Prompt byte length.
+             */
+            bytes: number;
+            /** @description Composed behavioral prompt. */
+            prompt: string;
+        };
         AgentResponse: {
             active_bead?: string;
             activity?: string;
@@ -2164,7 +2209,7 @@ export interface components {
             needs?: string[] | null;
             parent?: string;
             /** Format: int64 */
-            priority?: number;
+            priority?: number | null;
             ref?: string;
             status: string;
             title: string;
@@ -2174,6 +2219,10 @@ export interface components {
         BeadAssignInputBody: {
             /** @description Assignee name. */
             assignee?: string;
+        };
+        BeadCloseBody: {
+            /** @description Operator-readable reason to persist as metadata.close_reason. */
+            reason?: string;
         };
         BeadCreateInputBody: {
             /** @description Assigned agent. */
@@ -6905,6 +6954,42 @@ export interface operations {
             };
         };
     };
+    "get-v0-city-by-city-name-agent-by-base-prime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description City name. */
+                cityName: string;
+                /** @description Agent name (unqualified, no rig). */
+                base: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "X-GC-Request-Id": components["headers"]["X-GC-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPrimeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    "X-GC-Request-Id": components["headers"]["X-GC-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "post-v0-city-by-city-name-agent-by-base-by-action": {
         parameters: {
             query?: never;
@@ -6918,7 +7003,7 @@ export interface operations {
                 /** @description Agent name (unqualified). */
                 base: string;
                 /** @description Action to perform. */
-                action: "suspend" | "resume";
+                action: "suspend" | "resume" | "nudge";
             };
             cookie?: never;
         };
@@ -7177,6 +7262,44 @@ export interface operations {
             };
         };
     };
+    "get-v0-city-by-city-name-agent-by-dir-by-base-prime": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description City name. */
+                cityName: string;
+                /** @description Agent directory (rig name). */
+                dir: string;
+                /** @description Agent base name. */
+                base: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    "X-GC-Request-Id": components["headers"]["X-GC-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgentPrimeBody"];
+                };
+            };
+            /** @description Error */
+            default: {
+                headers: {
+                    "X-GC-Request-Id": components["headers"]["X-GC-Request-Id"];
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/problem+json": components["schemas"]["ErrorModel"];
+                };
+            };
+        };
+    };
     "post-v0-city-by-city-name-agent-by-dir-by-base-by-action": {
         parameters: {
             query?: never;
@@ -7192,7 +7315,7 @@ export interface operations {
                 /** @description Agent base name. */
                 base: string;
                 /** @description Action to perform. */
-                action: "suspend" | "resume";
+                action: "suspend" | "resume" | "nudge";
             };
             cookie?: never;
         };
@@ -7492,7 +7615,11 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["BeadCloseBody"];
+            };
+        };
         responses: {
             /** @description OK */
             200: {

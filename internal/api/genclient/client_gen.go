@@ -224,6 +224,7 @@ func (e TranscriptProvenance) Valid() bool {
 
 // Defines values for PostV0CityByCityNameAgentByBaseByActionParamsAction.
 const (
+	PostV0CityByCityNameAgentByBaseByActionParamsActionNudge   PostV0CityByCityNameAgentByBaseByActionParamsAction = "nudge"
 	PostV0CityByCityNameAgentByBaseByActionParamsActionResume  PostV0CityByCityNameAgentByBaseByActionParamsAction = "resume"
 	PostV0CityByCityNameAgentByBaseByActionParamsActionSuspend PostV0CityByCityNameAgentByBaseByActionParamsAction = "suspend"
 )
@@ -231,6 +232,8 @@ const (
 // Valid indicates whether the value is a known member of the PostV0CityByCityNameAgentByBaseByActionParamsAction enum.
 func (e PostV0CityByCityNameAgentByBaseByActionParamsAction) Valid() bool {
 	switch e {
+	case PostV0CityByCityNameAgentByBaseByActionParamsActionNudge:
+		return true
 	case PostV0CityByCityNameAgentByBaseByActionParamsActionResume:
 		return true
 	case PostV0CityByCityNameAgentByBaseByActionParamsActionSuspend:
@@ -242,6 +245,7 @@ func (e PostV0CityByCityNameAgentByBaseByActionParamsAction) Valid() bool {
 
 // Defines values for PostV0CityByCityNameAgentByDirByBaseByActionParamsAction.
 const (
+	PostV0CityByCityNameAgentByDirByBaseByActionParamsActionNudge   PostV0CityByCityNameAgentByDirByBaseByActionParamsAction = "nudge"
 	PostV0CityByCityNameAgentByDirByBaseByActionParamsActionResume  PostV0CityByCityNameAgentByDirByBaseByActionParamsAction = "resume"
 	PostV0CityByCityNameAgentByDirByBaseByActionParamsActionSuspend PostV0CityByCityNameAgentByDirByBaseByActionParamsAction = "suspend"
 )
@@ -249,6 +253,8 @@ const (
 // Valid indicates whether the value is a known member of the PostV0CityByCityNameAgentByDirByBaseByActionParamsAction enum.
 func (e PostV0CityByCityNameAgentByDirByBaseByActionParamsAction) Valid() bool {
 	switch e {
+	case PostV0CityByCityNameAgentByDirByBaseByActionParamsActionNudge:
+		return true
 	case PostV0CityByCityNameAgentByDirByBaseByActionParamsActionResume:
 		return true
 	case PostV0CityByCityNameAgentByDirByBaseByActionParamsActionSuspend:
@@ -403,6 +409,18 @@ type AgentPatchSetInputBody struct {
 	WorkDir *string `json:"work_dir,omitempty"`
 }
 
+// AgentPrimeBody defines model for AgentPrimeBody.
+type AgentPrimeBody struct {
+	// Agent Resolved agent identity.
+	Agent string `json:"agent"`
+
+	// Bytes Prompt byte length.
+	Bytes int64 `json:"bytes"`
+
+	// Prompt Composed behavioral prompt.
+	Prompt string `json:"prompt"`
+}
+
 // AgentResponse defines model for AgentResponse.
 type AgentResponse struct {
 	ActiveBead        *string      `json:"active_bead,omitempty"`
@@ -524,6 +542,12 @@ type Bead struct {
 type BeadAssignInputBody struct {
 	// Assignee Assignee name.
 	Assignee *string `json:"assignee,omitempty"`
+}
+
+// BeadCloseBody defines model for BeadCloseBody.
+type BeadCloseBody struct {
+	// Reason Operator-readable reason to persist as metadata.close_reason.
+	Reason *string `json:"reason,omitempty"`
 }
 
 // BeadCreateInputBody defines model for BeadCreateInputBody.
@@ -5524,6 +5548,9 @@ type PatchV0CityByCityNameBeadByIdJSONRequestBody = BeadUpdateBody
 // PostV0CityByCityNameBeadByIdAssignJSONRequestBody defines body for PostV0CityByCityNameBeadByIdAssign for application/json ContentType.
 type PostV0CityByCityNameBeadByIdAssignJSONRequestBody = BeadAssignInputBody
 
+// PostV0CityByCityNameBeadByIdCloseJSONRequestBody defines body for PostV0CityByCityNameBeadByIdClose for application/json ContentType.
+type PostV0CityByCityNameBeadByIdCloseJSONRequestBody = BeadCloseBody
+
 // PostV0CityByCityNameBeadByIdUpdateJSONRequestBody defines body for PostV0CityByCityNameBeadByIdUpdate for application/json ContentType.
 type PostV0CityByCityNameBeadByIdUpdateJSONRequestBody = BeadUpdateBody
 
@@ -9987,6 +10014,9 @@ type ClientInterface interface {
 	// StreamAgentOutput request
 	StreamAgentOutput(ctx context.Context, cityName string, base string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
+	// GetV0CityByCityNameAgentByBasePrime request
+	GetV0CityByCityNameAgentByBasePrime(ctx context.Context, cityName string, base string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
 	// PostV0CityByCityNameAgentByBaseByAction request
 	PostV0CityByCityNameAgentByBaseByAction(ctx context.Context, cityName string, base string, action PostV0CityByCityNameAgentByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByBaseByActionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
 
@@ -10006,6 +10036,9 @@ type ClientInterface interface {
 
 	// StreamAgentOutputQualified request
 	StreamAgentOutputQualified(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	// GetV0CityByCityNameAgentByDirByBasePrime request
+	GetV0CityByCityNameAgentByDirByBasePrime(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// PostV0CityByCityNameAgentByDirByBaseByAction request
 	PostV0CityByCityNameAgentByDirByBaseByAction(ctx context.Context, cityName string, dir string, base string, action PostV0CityByCityNameAgentByDirByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByDirByBaseByActionParams, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -10034,8 +10067,10 @@ type ClientInterface interface {
 
 	PostV0CityByCityNameBeadByIdAssign(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdAssignParams, body PostV0CityByCityNameBeadByIdAssignJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
-	// PostV0CityByCityNameBeadByIdClose request
-	PostV0CityByCityNameBeadByIdClose(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, reqEditors ...RequestEditorFn) (*http.Response, error)
+	// PostV0CityByCityNameBeadByIdCloseWithBody request with any body
+	PostV0CityByCityNameBeadByIdCloseWithBody(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error)
+
+	PostV0CityByCityNameBeadByIdClose(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, body PostV0CityByCityNameBeadByIdCloseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error)
 
 	// GetV0CityByCityNameBeadByIdDeps request
 	GetV0CityByCityNameBeadByIdDeps(ctx context.Context, cityName string, id string, reqEditors ...RequestEditorFn) (*http.Response, error)
@@ -10625,6 +10660,18 @@ func (c *Client) StreamAgentOutput(ctx context.Context, cityName string, base st
 	return c.Client.Do(req)
 }
 
+func (c *Client) GetV0CityByCityNameAgentByBasePrime(ctx context.Context, cityName string, base string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV0CityByCityNameAgentByBasePrimeRequest(c.Server, cityName, base)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
 func (c *Client) PostV0CityByCityNameAgentByBaseByAction(ctx context.Context, cityName string, base string, action PostV0CityByCityNameAgentByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByBaseByActionParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewPostV0CityByCityNameAgentByBaseByActionRequest(c.Server, cityName, base, action, params)
 	if err != nil {
@@ -10699,6 +10746,18 @@ func (c *Client) GetV0CityByCityNameAgentByDirByBaseOutput(ctx context.Context, 
 
 func (c *Client) StreamAgentOutputQualified(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*http.Response, error) {
 	req, err := NewStreamAgentOutputQualifiedRequest(c.Server, cityName, dir, base)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) GetV0CityByCityNameAgentByDirByBasePrime(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewGetV0CityByCityNameAgentByDirByBasePrimeRequest(c.Server, cityName, dir, base)
 	if err != nil {
 		return nil, err
 	}
@@ -10829,8 +10888,20 @@ func (c *Client) PostV0CityByCityNameBeadByIdAssign(ctx context.Context, cityNam
 	return c.Client.Do(req)
 }
 
-func (c *Client) PostV0CityByCityNameBeadByIdClose(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, reqEditors ...RequestEditorFn) (*http.Response, error) {
-	req, err := NewPostV0CityByCityNameBeadByIdCloseRequest(c.Server, cityName, id, params)
+func (c *Client) PostV0CityByCityNameBeadByIdCloseWithBody(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV0CityByCityNameBeadByIdCloseRequestWithBody(c.Server, cityName, id, params, contentType, body)
+	if err != nil {
+		return nil, err
+	}
+	req = req.WithContext(ctx)
+	if err := c.applyEditors(ctx, req, reqEditors); err != nil {
+		return nil, err
+	}
+	return c.Client.Do(req)
+}
+
+func (c *Client) PostV0CityByCityNameBeadByIdClose(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, body PostV0CityByCityNameBeadByIdCloseJSONRequestBody, reqEditors ...RequestEditorFn) (*http.Response, error) {
+	req, err := NewPostV0CityByCityNameBeadByIdCloseRequest(c.Server, cityName, id, params, body)
 	if err != nil {
 		return nil, err
 	}
@@ -13184,6 +13255,47 @@ func NewStreamAgentOutputRequest(server string, cityName string, base string) (*
 	return req, nil
 }
 
+// NewGetV0CityByCityNameAgentByBasePrimeRequest generates requests for GetV0CityByCityNameAgentByBasePrime
+func NewGetV0CityByCityNameAgentByBasePrimeRequest(server string, cityName string, base string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "cityName", cityName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "base", base, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v0/city/%s/agent/%s/prime", pathParam0, pathParam1)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
 // NewPostV0CityByCityNameAgentByBaseByActionRequest generates requests for PostV0CityByCityNameAgentByBaseByAction
 func NewPostV0CityByCityNameAgentByBaseByActionRequest(server string, cityName string, base string, action PostV0CityByCityNameAgentByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByBaseByActionParams) (*http.Request, error) {
 	var err error
@@ -13545,6 +13657,54 @@ func NewStreamAgentOutputQualifiedRequest(server string, cityName string, dir st
 	}
 
 	operationPath := fmt.Sprintf("/v0/city/%s/agent/%s/%s/output/stream", pathParam0, pathParam1, pathParam2)
+	if operationPath[0] == '/' {
+		operationPath = "." + operationPath
+	}
+
+	queryURL, err := serverURL.Parse(operationPath)
+	if err != nil {
+		return nil, err
+	}
+
+	req, err := http.NewRequest("GET", queryURL.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return req, nil
+}
+
+// NewGetV0CityByCityNameAgentByDirByBasePrimeRequest generates requests for GetV0CityByCityNameAgentByDirByBasePrime
+func NewGetV0CityByCityNameAgentByDirByBasePrimeRequest(server string, cityName string, dir string, base string) (*http.Request, error) {
+	var err error
+
+	var pathParam0 string
+
+	pathParam0, err = runtime.StyleParamWithOptions("simple", false, "cityName", cityName, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam1 string
+
+	pathParam1, err = runtime.StyleParamWithOptions("simple", false, "dir", dir, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	var pathParam2 string
+
+	pathParam2, err = runtime.StyleParamWithOptions("simple", false, "base", base, runtime.StyleParamOptions{ParamLocation: runtime.ParamLocationPath, Type: "string", Format: ""})
+	if err != nil {
+		return nil, err
+	}
+
+	serverURL, err := url.Parse(server)
+	if err != nil {
+		return nil, err
+	}
+
+	operationPath := fmt.Sprintf("/v0/city/%s/agent/%s/%s/prime", pathParam0, pathParam1, pathParam2)
 	if operationPath[0] == '/' {
 		operationPath = "." + operationPath
 	}
@@ -14055,8 +14215,19 @@ func NewPostV0CityByCityNameBeadByIdAssignRequestWithBody(server string, cityNam
 	return req, nil
 }
 
-// NewPostV0CityByCityNameBeadByIdCloseRequest generates requests for PostV0CityByCityNameBeadByIdClose
-func NewPostV0CityByCityNameBeadByIdCloseRequest(server string, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams) (*http.Request, error) {
+// NewPostV0CityByCityNameBeadByIdCloseRequest calls the generic PostV0CityByCityNameBeadByIdClose builder with application/json body
+func NewPostV0CityByCityNameBeadByIdCloseRequest(server string, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, body PostV0CityByCityNameBeadByIdCloseJSONRequestBody) (*http.Request, error) {
+	var bodyReader io.Reader
+	buf, err := json.Marshal(body)
+	if err != nil {
+		return nil, err
+	}
+	bodyReader = bytes.NewReader(buf)
+	return NewPostV0CityByCityNameBeadByIdCloseRequestWithBody(server, cityName, id, params, "application/json", bodyReader)
+}
+
+// NewPostV0CityByCityNameBeadByIdCloseRequestWithBody generates requests for PostV0CityByCityNameBeadByIdClose with any type of body
+func NewPostV0CityByCityNameBeadByIdCloseRequestWithBody(server string, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, contentType string, body io.Reader) (*http.Request, error) {
 	var err error
 
 	var pathParam0 string
@@ -14088,10 +14259,12 @@ func NewPostV0CityByCityNameBeadByIdCloseRequest(server string, cityName string,
 		return nil, err
 	}
 
-	req, err := http.NewRequest("POST", queryURL.String(), nil)
+	req, err := http.NewRequest("POST", queryURL.String(), body)
 	if err != nil {
 		return nil, err
 	}
+
+	req.Header.Add("Content-Type", contentType)
 
 	if params != nil {
 
@@ -22028,6 +22201,9 @@ type ClientWithResponsesInterface interface {
 	// StreamAgentOutputWithResponse request
 	StreamAgentOutputWithResponse(ctx context.Context, cityName string, base string, reqEditors ...RequestEditorFn) (*StreamAgentOutputResponse, error)
 
+	// GetV0CityByCityNameAgentByBasePrimeWithResponse request
+	GetV0CityByCityNameAgentByBasePrimeWithResponse(ctx context.Context, cityName string, base string, reqEditors ...RequestEditorFn) (*GetV0CityByCityNameAgentByBasePrimeResponse, error)
+
 	// PostV0CityByCityNameAgentByBaseByActionWithResponse request
 	PostV0CityByCityNameAgentByBaseByActionWithResponse(ctx context.Context, cityName string, base string, action PostV0CityByCityNameAgentByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByBaseByActionParams, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameAgentByBaseByActionResponse, error)
 
@@ -22047,6 +22223,9 @@ type ClientWithResponsesInterface interface {
 
 	// StreamAgentOutputQualifiedWithResponse request
 	StreamAgentOutputQualifiedWithResponse(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*StreamAgentOutputQualifiedResponse, error)
+
+	// GetV0CityByCityNameAgentByDirByBasePrimeWithResponse request
+	GetV0CityByCityNameAgentByDirByBasePrimeWithResponse(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*GetV0CityByCityNameAgentByDirByBasePrimeResponse, error)
 
 	// PostV0CityByCityNameAgentByDirByBaseByActionWithResponse request
 	PostV0CityByCityNameAgentByDirByBaseByActionWithResponse(ctx context.Context, cityName string, dir string, base string, action PostV0CityByCityNameAgentByDirByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByDirByBaseByActionParams, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameAgentByDirByBaseByActionResponse, error)
@@ -22075,8 +22254,10 @@ type ClientWithResponsesInterface interface {
 
 	PostV0CityByCityNameBeadByIdAssignWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdAssignParams, body PostV0CityByCityNameBeadByIdAssignJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdAssignResponse, error)
 
-	// PostV0CityByCityNameBeadByIdCloseWithResponse request
-	PostV0CityByCityNameBeadByIdCloseWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdCloseResponse, error)
+	// PostV0CityByCityNameBeadByIdCloseWithBodyWithResponse request with any body
+	PostV0CityByCityNameBeadByIdCloseWithBodyWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdCloseResponse, error)
+
+	PostV0CityByCityNameBeadByIdCloseWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, body PostV0CityByCityNameBeadByIdCloseJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdCloseResponse, error)
 
 	// GetV0CityByCityNameBeadByIdDepsWithResponse request
 	GetV0CityByCityNameBeadByIdDepsWithResponse(ctx context.Context, cityName string, id string, reqEditors ...RequestEditorFn) (*GetV0CityByCityNameBeadByIdDepsResponse, error)
@@ -22739,6 +22920,29 @@ func (r StreamAgentOutputResponse) StatusCode() int {
 	return 0
 }
 
+type GetV0CityByCityNameAgentByBasePrimeResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *AgentPrimeBody
+	ApplicationproblemJSONDefault *ErrorModel
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV0CityByCityNameAgentByBasePrimeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV0CityByCityNameAgentByBasePrimeResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
 type PostV0CityByCityNameAgentByBaseByActionResponse struct {
 	Body                          []byte
 	HTTPResponse                  *http.Response
@@ -22870,6 +23074,29 @@ func (r StreamAgentOutputQualifiedResponse) Status() string {
 
 // StatusCode returns HTTPResponse.StatusCode
 func (r StreamAgentOutputQualifiedResponse) StatusCode() int {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.StatusCode
+	}
+	return 0
+}
+
+type GetV0CityByCityNameAgentByDirByBasePrimeResponse struct {
+	Body                          []byte
+	HTTPResponse                  *http.Response
+	JSON200                       *AgentPrimeBody
+	ApplicationproblemJSONDefault *ErrorModel
+}
+
+// Status returns HTTPResponse.Status
+func (r GetV0CityByCityNameAgentByDirByBasePrimeResponse) Status() string {
+	if r.HTTPResponse != nil {
+		return r.HTTPResponse.Status
+	}
+	return http.StatusText(0)
+}
+
+// StatusCode returns HTTPResponse.StatusCode
+func (r GetV0CityByCityNameAgentByDirByBasePrimeResponse) StatusCode() int {
 	if r.HTTPResponse != nil {
 		return r.HTTPResponse.StatusCode
 	}
@@ -25954,6 +26181,15 @@ func (c *ClientWithResponses) StreamAgentOutputWithResponse(ctx context.Context,
 	return ParseStreamAgentOutputResponse(rsp)
 }
 
+// GetV0CityByCityNameAgentByBasePrimeWithResponse request returning *GetV0CityByCityNameAgentByBasePrimeResponse
+func (c *ClientWithResponses) GetV0CityByCityNameAgentByBasePrimeWithResponse(ctx context.Context, cityName string, base string, reqEditors ...RequestEditorFn) (*GetV0CityByCityNameAgentByBasePrimeResponse, error) {
+	rsp, err := c.GetV0CityByCityNameAgentByBasePrime(ctx, cityName, base, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV0CityByCityNameAgentByBasePrimeResponse(rsp)
+}
+
 // PostV0CityByCityNameAgentByBaseByActionWithResponse request returning *PostV0CityByCityNameAgentByBaseByActionResponse
 func (c *ClientWithResponses) PostV0CityByCityNameAgentByBaseByActionWithResponse(ctx context.Context, cityName string, base string, action PostV0CityByCityNameAgentByBaseByActionParamsAction, params *PostV0CityByCityNameAgentByBaseByActionParams, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameAgentByBaseByActionResponse, error) {
 	rsp, err := c.PostV0CityByCityNameAgentByBaseByAction(ctx, cityName, base, action, params, reqEditors...)
@@ -26014,6 +26250,15 @@ func (c *ClientWithResponses) StreamAgentOutputQualifiedWithResponse(ctx context
 		return nil, err
 	}
 	return ParseStreamAgentOutputQualifiedResponse(rsp)
+}
+
+// GetV0CityByCityNameAgentByDirByBasePrimeWithResponse request returning *GetV0CityByCityNameAgentByDirByBasePrimeResponse
+func (c *ClientWithResponses) GetV0CityByCityNameAgentByDirByBasePrimeWithResponse(ctx context.Context, cityName string, dir string, base string, reqEditors ...RequestEditorFn) (*GetV0CityByCityNameAgentByDirByBasePrimeResponse, error) {
+	rsp, err := c.GetV0CityByCityNameAgentByDirByBasePrime(ctx, cityName, dir, base, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParseGetV0CityByCityNameAgentByDirByBasePrimeResponse(rsp)
 }
 
 // PostV0CityByCityNameAgentByDirByBaseByActionWithResponse request returning *PostV0CityByCityNameAgentByDirByBaseByActionResponse
@@ -26103,9 +26348,17 @@ func (c *ClientWithResponses) PostV0CityByCityNameBeadByIdAssignWithResponse(ctx
 	return ParsePostV0CityByCityNameBeadByIdAssignResponse(rsp)
 }
 
-// PostV0CityByCityNameBeadByIdCloseWithResponse request returning *PostV0CityByCityNameBeadByIdCloseResponse
-func (c *ClientWithResponses) PostV0CityByCityNameBeadByIdCloseWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdCloseResponse, error) {
-	rsp, err := c.PostV0CityByCityNameBeadByIdClose(ctx, cityName, id, params, reqEditors...)
+// PostV0CityByCityNameBeadByIdCloseWithBodyWithResponse request with arbitrary body returning *PostV0CityByCityNameBeadByIdCloseResponse
+func (c *ClientWithResponses) PostV0CityByCityNameBeadByIdCloseWithBodyWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, contentType string, body io.Reader, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdCloseResponse, error) {
+	rsp, err := c.PostV0CityByCityNameBeadByIdCloseWithBody(ctx, cityName, id, params, contentType, body, reqEditors...)
+	if err != nil {
+		return nil, err
+	}
+	return ParsePostV0CityByCityNameBeadByIdCloseResponse(rsp)
+}
+
+func (c *ClientWithResponses) PostV0CityByCityNameBeadByIdCloseWithResponse(ctx context.Context, cityName string, id string, params *PostV0CityByCityNameBeadByIdCloseParams, body PostV0CityByCityNameBeadByIdCloseJSONRequestBody, reqEditors ...RequestEditorFn) (*PostV0CityByCityNameBeadByIdCloseResponse, error) {
+	rsp, err := c.PostV0CityByCityNameBeadByIdClose(ctx, cityName, id, params, body, reqEditors...)
 	if err != nil {
 		return nil, err
 	}
@@ -27796,6 +28049,39 @@ func ParseStreamAgentOutputResponse(rsp *http.Response) (*StreamAgentOutputRespo
 	return response, nil
 }
 
+// ParseGetV0CityByCityNameAgentByBasePrimeResponse parses an HTTP response from a GetV0CityByCityNameAgentByBasePrimeWithResponse call
+func ParseGetV0CityByCityNameAgentByBasePrimeResponse(rsp *http.Response) (*GetV0CityByCityNameAgentByBasePrimeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV0CityByCityNameAgentByBasePrimeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentPrimeBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
 // ParsePostV0CityByCityNameAgentByBaseByActionResponse parses an HTTP response from a PostV0CityByCityNameAgentByBaseByActionWithResponse call
 func ParsePostV0CityByCityNameAgentByBaseByActionResponse(rsp *http.Response) (*PostV0CityByCityNameAgentByBaseByActionResponse, error) {
 	bodyBytes, err := io.ReadAll(rsp.Body)
@@ -27975,6 +28261,39 @@ func ParseStreamAgentOutputQualifiedResponse(rsp *http.Response) (*StreamAgentOu
 	}
 
 	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
+		var dest ErrorModel
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.ApplicationproblemJSONDefault = &dest
+
+	}
+
+	return response, nil
+}
+
+// ParseGetV0CityByCityNameAgentByDirByBasePrimeResponse parses an HTTP response from a GetV0CityByCityNameAgentByDirByBasePrimeWithResponse call
+func ParseGetV0CityByCityNameAgentByDirByBasePrimeResponse(rsp *http.Response) (*GetV0CityByCityNameAgentByDirByBasePrimeResponse, error) {
+	bodyBytes, err := io.ReadAll(rsp.Body)
+	defer func() { _ = rsp.Body.Close() }()
+	if err != nil {
+		return nil, err
+	}
+
+	response := &GetV0CityByCityNameAgentByDirByBasePrimeResponse{
+		Body:         bodyBytes,
+		HTTPResponse: rsp,
+	}
+
+	switch {
+	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && rsp.StatusCode == 200:
+		var dest AgentPrimeBody
+		if err := json.Unmarshal(bodyBytes, &dest); err != nil {
+			return nil, err
+		}
+		response.JSON200 = &dest
+
 	case strings.Contains(rsp.Header.Get("Content-Type"), "json") && true:
 		var dest ErrorModel
 		if err := json.Unmarshal(bodyBytes, &dest); err != nil {

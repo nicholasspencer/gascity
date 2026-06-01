@@ -13,6 +13,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/gastownhall/gascity/internal/telemetry"
@@ -85,13 +86,16 @@ func ExecCommandRunnerWithEnv(env map[string]string) CommandRunner {
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		defer cancel()
 		var slowTimer *time.Timer
+		var bdCommandRunning atomic.Bool
 		if name == "bd" {
 			bdArgs := append([]string(nil), args...)
 			agentID := bdTelemetryAgentID(env)
+			bdCommandRunning.Store(true)
 			slowTimer = time.AfterFunc(bdSlowTelemetryThreshold, func() {
-				telemetry.RecordBDSlow(ctx, bdArgs, dir, agentID)
+				if bdCommandRunning.Load() {
+					telemetry.RecordBDSlow(ctx, bdArgs, dir, agentID)
+				}
 			})
-			defer slowTimer.Stop()
 		}
 		cmd := exec.CommandContext(ctx, name, args...)
 		cmd.WaitDelay = 2 * time.Second
@@ -106,6 +110,10 @@ func ExecCommandRunnerWithEnv(env map[string]string) CommandRunner {
 		var stderr bytes.Buffer
 		cmd.Stderr = &stderr
 		out, err := cmd.Output()
+		if slowTimer != nil {
+			bdCommandRunning.Store(false)
+			slowTimer.Stop()
+		}
 		if name == "bd" {
 			// Structured JSONL trace — independent of the legacy line-format
 			// trace above (gated by GC_BD_TRACE_JSON, not GC_BD_TRACE).

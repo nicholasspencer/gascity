@@ -104,9 +104,16 @@ func TestExecCommandRunnerStopsBDSlowTimerForFastBDCommand(t *testing.T) {
 
 	exp := installBeadsRecordingLogExporter(t)
 	binDir := t.TempDir()
-	writeExecutable(t, filepath.Join(binDir, "bd"), `#!/bin/sh
+	bdPath := filepath.Join(binDir, "bd")
+	writeExecutable(t, bdPath, `#!/bin/sh
 printf '[]\n'
 `)
+	// Warm the script before starting the telemetry assertion. On macOS, the
+	// first exec of a new script can spend tens of milliseconds in validation,
+	// which would make this fixture a genuinely slow bd command.
+	if out, err := exec.Command(bdPath).CombinedOutput(); err != nil {
+		t.Fatalf("warm fake bd: %v: %s", err, strings.TrimSpace(string(out)))
+	}
 	t.Setenv("PATH", binDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 
 	if _, err := ExecCommandRunner()(t.TempDir(), "bd", "list"); err != nil {

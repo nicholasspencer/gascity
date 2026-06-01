@@ -22,7 +22,7 @@ type Bead struct {
 	Title     string    `json:"title"`
 	Status    string    `json:"status"`     // "open", "in_progress", "closed"
 	Type      string    `json:"issue_type"` // "task" default; matches bd wire format
-	Priority  *int      `json:"priority,omitempty"`
+	Priority  *int      `json:"priority,omitempty" nullable:"true"`
 	CreatedAt time.Time `json:"created_at"`
 	// UpdatedAt is zero for legacy beads; UpdatedBefore falls back to CreatedAt.
 	UpdatedAt    time.Time         `json:"updated_at,omitempty,omitzero"`

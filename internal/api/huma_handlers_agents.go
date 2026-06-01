@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"io"
 	"log"
 	"net/http"
 	"strings"
@@ -10,8 +11,11 @@ import (
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/danielgtaylor/huma/v2/sse"
+	"github.com/gastownhall/gascity/internal/agentprime"
 	"github.com/gastownhall/gascity/internal/config"
 )
+
+const defaultAgentNudgeMessage = "Check for assigned Gas City work."
 
 // humaHandleAgentList is the Huma-typed handler for GET /v0/agents.
 func (s *Server) humaHandleAgentList(ctx context.Context, input *AgentListInput) (*ListOutput[agentResponse], error) {
@@ -236,6 +240,49 @@ func (s *Server) agentByName(name string) (*IndexOutput[agentResponse], error) {
 	}, nil
 }
 
+// humaHandleAgentPrime is the Huma-typed handler for
+// GET /v0/city/{cityName}/agent/{base}/prime.
+func (s *Server) humaHandleAgentPrime(_ context.Context, input *AgentPrimeInput) (*AgentPrimeOutput, error) {
+	return s.agentPrimeByName(input.Name)
+}
+
+// humaHandleAgentPrimeQualified is the Huma-typed handler for
+// GET /v0/city/{cityName}/agent/{dir}/{base}/prime.
+func (s *Server) humaHandleAgentPrimeQualified(_ context.Context, input *AgentPrimeQualifiedInput) (*AgentPrimeOutput, error) {
+	return s.agentPrimeByName(input.QualifiedName())
+}
+
+func (s *Server) agentPrimeByName(name string) (*AgentPrimeOutput, error) {
+	result, err := agentprime.ComposeStrict(agentprime.Request{
+		CityPath:  s.state.CityPath(),
+		CityName:  s.state.CityName(),
+		Config:    s.state.Config(),
+		AgentName: name,
+		Stderr:    io.Discard,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, agentprime.ErrAgentNameRequired):
+			return nil, huma.Error400BadRequest("agent name required")
+		case errors.Is(err, agentprime.ErrAgentNotFound):
+			return nil, huma.Error404NotFound("agent " + name + " not found")
+		default:
+			var templateErr agentprime.PromptTemplateError
+			if errors.As(err, &templateErr) {
+				return nil, huma.Error500InternalServerError("composing agent prompt: " + templateErr.Error())
+			}
+			return nil, huma.Error500InternalServerError("composing agent prompt")
+		}
+	}
+	return &AgentPrimeOutput{
+		Body: AgentPrimeBody{
+			Agent:  result.Agent,
+			Prompt: result.Prompt,
+			Bytes:  result.Bytes,
+		},
+	}, nil
+}
+
 // humaHandleAgentCreate is the Huma-typed handler for POST /v0/agents.
 // Body validation (Name and Provider required with minLength:"1") is
 // enforced by the framework from AgentCreateInput's struct tags.
@@ -344,21 +391,17 @@ func (s *Server) deleteAgentByName(name string) (*OKResponse, error) {
 
 // humaHandleAgentAction is the Huma-typed handler for
 // POST /v0/city/{cityName}/agent/{base}/{action}.
-func (s *Server) humaHandleAgentAction(_ context.Context, input *AgentActionInput) (*OKResponse, error) {
-	return s.agentActionByName(input.Name, input.Action)
+func (s *Server) humaHandleAgentAction(ctx context.Context, input *AgentActionInput) (*OKResponse, error) {
+	return s.agentActionByName(ctx, input.Name, input.Action)
 }
 
 // humaHandleAgentActionQualified is the Huma-typed handler for
 // POST /v0/city/{cityName}/agent/{dir}/{base}/{action}.
-func (s *Server) humaHandleAgentActionQualified(_ context.Context, input *AgentActionQualifiedInput) (*OKResponse, error) {
-	return s.agentActionByName(input.QualifiedName(), input.Action)
+func (s *Server) humaHandleAgentActionQualified(ctx context.Context, input *AgentActionQualifiedInput) (*OKResponse, error) {
+	return s.agentActionByName(ctx, input.QualifiedName(), input.Action)
 }
 
-func (s *Server) agentActionByName(name, action string) (*OKResponse, error) {
-	sm, ok := s.state.(StateMutator)
-	if !ok {
-		return nil, errMutationsNotSupported
-	}
+func (s *Server) agentActionByName(ctx context.Context, name, action string) (*OKResponse, error) {
 	cfg := s.state.Config()
 	if _, ok := findAgent(cfg, name); !ok {
 		return nil, huma.Error404NotFound("agent " + name + " not found")
@@ -366,14 +409,41 @@ func (s *Server) agentActionByName(name, action string) (*OKResponse, error) {
 	var err error
 	switch action {
 	case "suspend":
+		sm, ok := s.state.(StateMutator)
+		if !ok {
+			return nil, errMutationsNotSupported
+		}
 		err = sm.SuspendAgent(name)
 	case "resume":
+		sm, ok := s.state.(StateMutator)
+		if !ok {
+			return nil, errMutationsNotSupported
+		}
 		err = sm.ResumeAgent(name)
+	case "nudge":
+		return s.agentNudgeByName(ctx, name)
 	default:
 		return nil, huma.Error400BadRequest("unknown agent action: " + action)
 	}
 	if err != nil {
 		return nil, mutationError(err)
+	}
+	resp := &OKResponse{}
+	resp.Body.Status = "ok"
+	return resp, nil
+}
+
+func (s *Server) agentNudgeByName(ctx context.Context, name string) (*OKResponse, error) {
+	store := s.state.CityBeadStore()
+	if store == nil {
+		return nil, huma.Error503ServiceUnavailable("no bead store configured")
+	}
+	id, err := s.resolveSessionIDMaterializingNamedWithContext(ctx, store, name)
+	if err != nil {
+		return nil, humaResolveError(err)
+	}
+	if err := s.sendBackgroundMessageToSession(ctx, store, id, defaultAgentNudgeMessage); err != nil {
+		return nil, humaSessionManagerError(err)
 	}
 	resp := &OKResponse{}
 	resp.Body.Status = "ok"

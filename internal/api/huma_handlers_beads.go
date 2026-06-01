@@ -3,6 +3,7 @@ package api
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/danielgtaylor/huma/v2"
 	"github.com/gastownhall/gascity/internal/beads"
@@ -357,6 +358,10 @@ func (s *Server) humaHandleBeadCreate(ctx context.Context, input *BeadCreateInpu
 // humaHandleBeadClose is the Huma-typed handler for POST /v0/bead/{id}/close.
 func (s *Server) humaHandleBeadClose(_ context.Context, input *BeadCloseInput) (*OKResponse, error) {
 	id := input.ID
+	reason := ""
+	if input.Body != nil {
+		reason = strings.TrimSpace(input.Body.Reason)
+	}
 	for _, store := range s.beadStoresForID(id) {
 		if _, err := store.Get(id); err != nil {
 			if errors.Is(err, beads.ErrNotFound) {
@@ -364,7 +369,7 @@ func (s *Server) humaHandleBeadClose(_ context.Context, input *BeadCloseInput) (
 			}
 			return nil, huma.Error500InternalServerError(err.Error())
 		}
-		if err := store.Close(id); err != nil {
+		if err := closeBeadWithReason(store, id, reason); err != nil {
 			if errors.Is(err, beads.ErrNotFound) {
 				return nil, huma.Error409Conflict("conflict: bead " + id + " was deleted concurrently")
 			}
@@ -375,6 +380,18 @@ func (s *Server) humaHandleBeadClose(_ context.Context, input *BeadCloseInput) (
 		return resp, nil
 	}
 	return nil, huma.Error404NotFound("bead " + id + " not found")
+}
+
+func closeBeadWithReason(store beads.Store, id, reason string) error {
+	if reason == "" {
+		return store.Close(id)
+	}
+	return store.Tx("close bead "+id+" with reason", func(tx beads.Tx) error {
+		if err := tx.SetMetadataBatch(id, map[string]string{"close_reason": reason}); err != nil {
+			return err
+		}
+		return tx.Close(id)
+	})
 }
 
 // humaHandleBeadReopen is the Huma-typed handler for POST /v0/bead/{id}/reopen.

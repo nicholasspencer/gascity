@@ -15,6 +15,7 @@ import (
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
 	"github.com/gastownhall/gascity/internal/runtime"
+	"github.com/gastownhall/gascity/internal/session"
 	"github.com/gastownhall/gascity/internal/sessionlog"
 )
 
@@ -481,6 +482,135 @@ func TestAgentGet(t *testing.T) {
 	}
 }
 
+func TestAgentPrimeReturnsComposedPrompt(t *testing.T) {
+	state := newFakeState(t)
+	state.cfg.Workspace.Provider = "test-agent"
+	state.cfg.Providers["test-agent"] = config.ProviderSpec{
+		DisplayName:      "Test Agent",
+		InstructionsFile: "TEST.md",
+	}
+	state.cfg.Agents = []config.Agent{{
+		Name:           "mayor",
+		Provider:       "test-agent",
+		PromptTemplate: "prompts/mayor.template.md",
+		Env:            map[string]string{"CUSTOM": "hello"},
+	}}
+	writePromptTemplate(t, state.cityPath, "prompts/mayor.template.md", strings.Join([]string{
+		"Agent={{ .AgentName }}",
+		"Template={{ .TemplateName }}",
+		"Provider={{ .ProviderDisplayName }}",
+		"Instructions={{ .InstructionsFile }}",
+		"Env={{ .CUSTOM }}",
+		"",
+	}, "\n"))
+
+	srv := New(state)
+	h := newTestCityHandlerWith(t, state, srv)
+	req := httptest.NewRequest("GET", cityURL(state, "/agent/mayor/prime"), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp struct {
+		Agent  string `json:"agent"`
+		Prompt string `json:"prompt"`
+		Bytes  int    `json:"bytes"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	wantPrompt := strings.Join([]string{
+		"Agent=mayor",
+		"Template=mayor",
+		"Provider=Test Agent",
+		"Instructions=TEST.md",
+		"Env=hello",
+		"",
+	}, "\n")
+	if resp.Agent != "mayor" {
+		t.Fatalf("agent = %q, want mayor", resp.Agent)
+	}
+	if resp.Prompt != wantPrompt {
+		t.Fatalf("prompt = %q, want %q", resp.Prompt, wantPrompt)
+	}
+	if resp.Bytes != len(wantPrompt) {
+		t.Fatalf("bytes = %d, want %d", resp.Bytes, len(wantPrompt))
+	}
+}
+
+func TestAgentPrimeQualifiedRouteReturnsComposedPrompt(t *testing.T) {
+	state := newFakeState(t)
+	state.cfg.Agents[0].PromptTemplate = "prompts/worker.template.md"
+	writePromptTemplate(t, state.cityPath, "prompts/worker.template.md", strings.Join([]string{
+		"Agent={{ .AgentName }}",
+		"Rig={{ .RigName }}",
+		"RigRoot={{ .RigRoot }}",
+		"",
+	}, "\n"))
+
+	srv := New(state)
+	h := newTestCityHandlerWith(t, state, srv)
+	req := httptest.NewRequest("GET", cityURL(state, "/agent/myrig/worker/prime"), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+
+	var resp struct {
+		Agent  string `json:"agent"`
+		Prompt string `json:"prompt"`
+		Bytes  int    `json:"bytes"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	wantPrompt := strings.Join([]string{
+		"Agent=myrig/worker",
+		"Rig=myrig",
+		"RigRoot=/tmp/myrig",
+		"",
+	}, "\n")
+	if resp.Agent != "myrig/worker" {
+		t.Fatalf("agent = %q, want myrig/worker", resp.Agent)
+	}
+	if resp.Prompt != wantPrompt {
+		t.Fatalf("prompt = %q, want %q", resp.Prompt, wantPrompt)
+	}
+	if resp.Bytes != len(wantPrompt) {
+		t.Fatalf("bytes = %d, want %d", resp.Bytes, len(wantPrompt))
+	}
+}
+
+func TestAgentPrimeRejectsUnknownAgent(t *testing.T) {
+	state := newFakeState(t)
+	srv := New(state)
+	h := newTestCityHandlerWith(t, state, srv)
+
+	req := httptest.NewRequest("GET", cityURL(state, "/agent/nonexistent/prime"), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+}
+
+func writePromptTemplate(t *testing.T, cityPath, relPath, content string) {
+	t.Helper()
+	path := filepath.Join(cityPath, relPath)
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		t.Fatalf("MkdirAll(%s): %v", filepath.Dir(path), err)
+	}
+	if err := os.WriteFile(path, []byte(content), 0o644); err != nil {
+		t.Fatalf("WriteFile(%s): %v", path, err)
+	}
+}
+
 func TestAgentGetActiveBeadUsesSessionIDOwnership(t *testing.T) {
 	state := newFakeState(t)
 	sessionName := "myrig--worker"
@@ -766,7 +896,7 @@ func TestAgentRuntimeActionsRemoved(t *testing.T) {
 	// by the spec's action enum at the Huma validation layer, before
 	// the handler runs. A 422 with a Problem Details body is the
 	// contract for "your request violated the input schema."
-	for _, action := range []string{"kill", "drain", "undrain", "nudge", "restart"} {
+	for _, action := range []string{"kill", "drain", "undrain", "restart"} {
 		req := newPostRequest(cityURL(state, "/agent/myrig/worker/")+action, nil)
 		rec := httptest.NewRecorder()
 		h.ServeHTTP(rec, req)
@@ -803,6 +933,74 @@ func TestAgentActionNotMutator(t *testing.T) {
 
 	if rec.Code != http.StatusNotImplemented {
 		t.Errorf("status = %d, want %d", rec.Code, http.StatusNotImplemented)
+	}
+}
+
+func TestAgentNudgeActionDeliversDefaultNudgeToQualifiedAgentSession(t *testing.T) {
+	state := newSessionFakeState(t)
+	mgr := session.NewManager(state.cityBeadStore, state.sp)
+	info, err := mgr.CreateAliasedNamedWithTransportAndMetadata(
+		context.Background(),
+		"myrig/worker",
+		"myrig--worker",
+		"worker",
+		"Worker",
+		"echo test",
+		"/tmp/myrig",
+		"test",
+		"",
+		nil,
+		session.ProviderResume{},
+		runtime.Config{},
+		map[string]string{"agent_name": "myrig/worker"},
+	)
+	if err != nil {
+		t.Fatalf("create worker session: %v", err)
+	}
+	if info.SessionName != "myrig--worker" {
+		t.Fatalf("session name = %q, want myrig--worker", info.SessionName)
+	}
+	state.sp.Calls = nil
+
+	srv := New(state)
+	h := newTestCityHandlerWith(t, state, srv)
+
+	req := newPostRequest(cityURL(state, "/agent/myrig/worker/nudge"), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var resp struct {
+		Status string `json:"status"`
+	}
+	if err := json.NewDecoder(rec.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if resp.Status != "ok" {
+		t.Fatalf("status body = %q, want ok", resp.Status)
+	}
+
+	for _, call := range state.sp.Calls {
+		if call.Method == "Nudge" && call.Name == "myrig--worker" && call.Message == defaultAgentNudgeMessage {
+			return
+		}
+	}
+	t.Fatalf("runtime calls = %#v, want Nudge(myrig--worker, %q)", state.sp.Calls, defaultAgentNudgeMessage)
+}
+
+func TestAgentNudgeActionRejectsUnknownAgent(t *testing.T) {
+	state := newSessionFakeState(t)
+	srv := New(state)
+	h := newTestCityHandlerWith(t, state, srv)
+
+	req := newPostRequest(cityURL(state, "/agent/ghost/nudge"), nil)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d; body=%s", rec.Code, http.StatusNotFound, rec.Body.String())
 	}
 }
 

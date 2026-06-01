@@ -52,6 +52,37 @@ func (i *AgentGetQualifiedInput) QualifiedName() string {
 	return joinAgentQualifiedName(i.Dir, i.Base)
 }
 
+// AgentPrimeInput is the Huma input for GET /v0/city/{cityName}/agent/{base}/prime.
+type AgentPrimeInput struct {
+	CityScope
+	Name string `path:"base" doc:"Agent name (unqualified, no rig)."`
+}
+
+// AgentPrimeQualifiedInput is the Huma input for
+// GET /v0/city/{cityName}/agent/{dir}/{base}/prime.
+type AgentPrimeQualifiedInput struct {
+	CityScope
+	Dir  string `path:"dir" doc:"Agent directory (rig name)."`
+	Base string `path:"base" doc:"Agent base name."`
+}
+
+// QualifiedName joins dir and base into a canonical agent name.
+func (i *AgentPrimeQualifiedInput) QualifiedName() string {
+	return joinAgentQualifiedName(i.Dir, i.Base)
+}
+
+// AgentPrimeBody contains the composed behavioral prompt for an agent.
+type AgentPrimeBody struct {
+	Agent  string `json:"agent" doc:"Resolved agent identity."`
+	Prompt string `json:"prompt" doc:"Composed behavioral prompt."`
+	Bytes  int    `json:"bytes" doc:"Prompt byte length."`
+}
+
+// AgentPrimeOutput is the Huma output for agent prompt composition.
+type AgentPrimeOutput struct {
+	Body AgentPrimeBody
+}
+
 // AgentCreateInput is the Huma input for POST /v0/city/{cityName}/agents.
 type AgentCreateInput struct {
 	CityScope
@@ -113,11 +144,11 @@ func (i *AgentDeleteQualifiedInput) QualifiedName() string {
 
 // AgentActionInput is the Huma input for
 // POST /v0/city/{cityName}/agent/{base}/{action}. Valid actions are
-// suspend, resume, and (reserved) restart — matching the rig-action shape.
+// suspend, resume, and nudge.
 type AgentActionInput struct {
 	CityScope
 	Name   string `path:"base" doc:"Agent name (unqualified)."`
-	Action string `path:"action" enum:"suspend,resume" doc:"Action to perform."`
+	Action string `path:"action" enum:"suspend,resume,nudge" doc:"Action to perform."`
 }
 
 // AgentActionQualifiedInput is the Huma input for
@@ -126,7 +157,7 @@ type AgentActionQualifiedInput struct {
 	CityScope
 	Dir    string `path:"dir" doc:"Agent directory (rig name)."`
 	Base   string `path:"base" doc:"Agent base name."`
-	Action string `path:"action" enum:"suspend,resume" doc:"Action to perform."`
+	Action string `path:"action" enum:"suspend,resume,nudge" doc:"Action to perform."`
 }
 
 // QualifiedName joins dir and base into a canonical agent name.

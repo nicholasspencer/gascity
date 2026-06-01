@@ -145,6 +145,21 @@ export type AgentPatchSetInputBody = {
     work_dir?: string;
 };
 
+export type AgentPrimeBody = {
+    /**
+     * Resolved agent identity.
+     */
+    agent: string;
+    /**
+     * Prompt byte length.
+     */
+    bytes: number;
+    /**
+     * Composed behavioral prompt.
+     */
+    prompt: string;
+};
+
 export type AgentResponse = {
     active_bead?: string;
     activity?: string;
@@ -268,7 +283,7 @@ export type Bead = {
     };
     needs?: Array<string> | null;
     parent?: string;
-    priority?: number;
+    priority?: number | null;
     ref?: string;
     status: string;
     title: string;
@@ -280,6 +295,13 @@ export type BeadAssignInputBody = {
      * Assignee name.
      */
     assignee?: string;
+};
+
+export type BeadCloseBody = {
+    /**
+     * Operator-readable reason to persist as metadata.close_reason.
+     */
+    reason?: string;
 };
 
 export type BeadCreateInputBody = {
@@ -5597,6 +5619,40 @@ export type StreamAgentOutputResponses = {
 
 export type StreamAgentOutputResponse = StreamAgentOutputResponses[keyof StreamAgentOutputResponses];
 
+export type GetV0CityByCityNameAgentByBasePrimeData = {
+    body?: never;
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+        /**
+         * Agent name (unqualified, no rig).
+         */
+        base: string;
+    };
+    query?: never;
+    url: '/v0/city/{cityName}/agent/{base}/prime';
+};
+
+export type GetV0CityByCityNameAgentByBasePrimeErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModel;
+};
+
+export type GetV0CityByCityNameAgentByBasePrimeError = GetV0CityByCityNameAgentByBasePrimeErrors[keyof GetV0CityByCityNameAgentByBasePrimeErrors];
+
+export type GetV0CityByCityNameAgentByBasePrimeResponses = {
+    /**
+     * OK
+     */
+    200: AgentPrimeBody;
+};
+
+export type GetV0CityByCityNameAgentByBasePrimeResponse = GetV0CityByCityNameAgentByBasePrimeResponses[keyof GetV0CityByCityNameAgentByBasePrimeResponses];
+
 export type PostV0CityByCityNameAgentByBaseByActionData = {
     body?: never;
     headers: {
@@ -5617,7 +5673,7 @@ export type PostV0CityByCityNameAgentByBaseByActionData = {
         /**
          * Action to perform.
          */
-        action: 'suspend' | 'resume';
+        action: 'suspend' | 'resume' | 'nudge';
     };
     query?: never;
     url: '/v0/city/{cityName}/agent/{base}/{action}';
@@ -5882,6 +5938,44 @@ export type StreamAgentOutputQualifiedResponses = {
 
 export type StreamAgentOutputQualifiedResponse = StreamAgentOutputQualifiedResponses[keyof StreamAgentOutputQualifiedResponses];
 
+export type GetV0CityByCityNameAgentByDirByBasePrimeData = {
+    body?: never;
+    path: {
+        /**
+         * City name.
+         */
+        cityName: string;
+        /**
+         * Agent directory (rig name).
+         */
+        dir: string;
+        /**
+         * Agent base name.
+         */
+        base: string;
+    };
+    query?: never;
+    url: '/v0/city/{cityName}/agent/{dir}/{base}/prime';
+};
+
+export type GetV0CityByCityNameAgentByDirByBasePrimeErrors = {
+    /**
+     * Error
+     */
+    default: ErrorModel;
+};
+
+export type GetV0CityByCityNameAgentByDirByBasePrimeError = GetV0CityByCityNameAgentByDirByBasePrimeErrors[keyof GetV0CityByCityNameAgentByDirByBasePrimeErrors];
+
+export type GetV0CityByCityNameAgentByDirByBasePrimeResponses = {
+    /**
+     * OK
+     */
+    200: AgentPrimeBody;
+};
+
+export type GetV0CityByCityNameAgentByDirByBasePrimeResponse = GetV0CityByCityNameAgentByDirByBasePrimeResponses[keyof GetV0CityByCityNameAgentByDirByBasePrimeResponses];
+
 export type PostV0CityByCityNameAgentByDirByBaseByActionData = {
     body?: never;
     headers: {
@@ -5906,7 +6000,7 @@ export type PostV0CityByCityNameAgentByDirByBaseByActionData = {
         /**
          * Action to perform.
          */
-        action: 'suspend' | 'resume';
+        action: 'suspend' | 'resume' | 'nudge';
     };
     query?: never;
     url: '/v0/city/{cityName}/agent/{dir}/{base}/{action}';
@@ -6178,7 +6272,7 @@ export type PostV0CityByCityNameBeadByIdAssignResponses = {
 export type PostV0CityByCityNameBeadByIdAssignResponse = PostV0CityByCityNameBeadByIdAssignResponses[keyof PostV0CityByCityNameBeadByIdAssignResponses];
 
 export type PostV0CityByCityNameBeadByIdCloseData = {
-    body?: never;
+    body?: BeadCloseBody;
     headers: {
         /**
          * Anti-CSRF header required on mutation requests. Any non-empty value is accepted; the header's presence is what the server checks.
