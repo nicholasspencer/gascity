@@ -5,7 +5,23 @@ All notable changes to Gas City will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.2.1] - 2026-05-31
+
+### Added
+
+- Claude Opus 4.8 is now listed in built-in Claude model choices and default
+  pricing. The `opus` model choice targets `claude-opus-4-8`; `opus-4-7`
+  remains available for cities that need the prior Opus target. Anthropic's
+  published regular-usage pricing is unchanged from Opus 4.7: $5/MTok input
+  and $25/MTok output.
+
+### Fixed
+
+- Built-in pack auto-includes now skip packs already reachable from rig pack
+  graphs, preventing duplicate maintenance agents when a rig pack imports a
+  built-in pack transitively.
+- CI, docs, the managed minimum check, and install helpers now pin Dolt 2.1.0
+  so hotfix validation and runtime dependency checks use the same Dolt floor.
 
 ## [1.2.0] - 2026-05-25
 
