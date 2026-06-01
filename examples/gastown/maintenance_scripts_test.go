@@ -2348,6 +2348,18 @@ exit 0
 	if strings.Contains(log, "SELECT DOLT_COMMIT") {
 		t.Errorf("reaper uses SELECT DOLT_COMMIT; must use CALL DOLT_COMMIT:\n%s", log)
 	}
+	for _, mutation := range []string{
+		"UPDATE `beads`.wisps SET status='closed'",
+		"DELETE FROM `beads`.wisps",
+	} {
+		mutationIdx := strings.Index(log, mutation)
+		if mutationIdx < 0 {
+			continue
+		}
+		if strings.LastIndex(log[:mutationIdx], "USE `beads`") < 0 {
+			t.Errorf("reaper mutation %q is not preceded by USE `beads`; Dolt may reject it with no database selected:\n%s", mutation, log)
+		}
+	}
 	if !strings.Contains(log, "CALL DOLT_COMMIT") {
 		t.Errorf("reaper missing CALL DOLT_COMMIT:\n%s", log)
 	}

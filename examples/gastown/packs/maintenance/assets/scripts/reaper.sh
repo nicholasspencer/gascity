@@ -304,6 +304,7 @@ run_sql_change() {
         return 1
     fi
     if ! output=$(dolt_sql -r csv -q "
+USE \`$db\`;
 $query;
 SELECT ROW_COUNT();
     " 2>"$stderr_file"); then

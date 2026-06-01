@@ -31,7 +31,9 @@ edges.
 The live Dolt schema stores the wisp graph in `wisp_dependencies`, not in the
 issue-level `dependencies` table. The reaper's wisp close and purge paths now
 probe and query `wisp_dependencies`; the stale issue auto-close exclusion path
-still uses `dependencies`.
+still uses `dependencies`. Every mutating SQL block now selects the target
+database with `USE <db>` before `UPDATE` or `DELETE`; live Dolt rejected the
+qualified `ga.*` update without that active database context.
 
 Live inspection also found generated step-spec debris: old unassigned `spec`
 wisps titled `Step spec for ...` with no incoming or outgoing wisp dependency
@@ -94,9 +96,13 @@ are de-duplicated.
   This code path is not present in this rebase-main worktree as of this report.
 - Live dry-run evidence on 2026-06-01 against `/data/projects/maintainer-city`
   with `gc` shimmed to `/bin/true`:
-  `reaper — stale_wisps:1397, closed_wisps:0, purged:0, sessions-pruned:0, closed:0, skipped_non_city_issues:0, mail_wisps:124, would_close_wisps:1235 (dry run)`.
+  `reaper — stale_wisps:1397, closed_wisps:0, purged:0, sessions-pruned:0, closed:0, skipped_non_city_issues:0, mail_wisps:126, would_close_wisps:1235 (dry run)`.
 - Direct SQL against the same Dolt server matched the dry-run first-pass
   close total: `bd=0`, `ga=1024`, `gg=0`, `gp=0`, `gt=81`, `mc=0`,
-  `my_db=130`, `rig=0` for `1235` total. The `ga` total is `884` safe
-  dependency-edge closures plus `140` isolated generated step specs. A
-  destructive live drain was not run from this patch.
+  `my_db=130`, `rig=0` for `1235` total. The first live run drained `gt`
+  and `my_db` but proved `ga` mutation needed an explicit `USE ga;` before
+  `UPDATE`; after that fix, a second live run closed `1031` `ga` wisps.
+  Post-drain `ga` had `842` non-message open wisps but only `13` stale
+  non-closed wisps older than 24h. The remaining above-threshold open count is
+  dominated by fresh active workflow wisps from the non-idle live queue, not
+  old reaper-eligible backlog.
