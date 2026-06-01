@@ -119,6 +119,7 @@ fi
 
 TOTAL_STALE_WISPS=0
 TOTAL_CLOSED_WISPS=0
+TOTAL_WOULD_CLOSE_WISPS=0
 TOTAL_PURGED=0
 TOTAL_MAIL_WISPS=0
 TOTAL_ISSUES_CLOSED=0
@@ -259,7 +260,7 @@ has_split_dependency_target_columns() {
     local output
     local fields
 
-    if ! output=$(dolt_sql -r csv -q "SHOW COLUMNS FROM \`$db\`.dependencies" 2>/dev/null); then
+    if ! output=$(dolt_sql -r csv -q "SHOW COLUMNS FROM \`$db\`.wisp_dependencies" 2>/dev/null); then
         return 0
     fi
 
@@ -368,7 +369,7 @@ while IFS= read -r DB; do
             WHERE w.status IN ('open', 'hooked', 'in_progress')
             AND w.created_at < DATE_SUB(NOW(), INTERVAL $MAX_AGE_H HOUR)
             AND EXISTS (
-                SELECT 1 FROM \`$DB\`.dependencies d
+                SELECT 1 FROM \`$DB\`.wisp_dependencies d
                 LEFT JOIN \`$DB\`.wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
                 LEFT JOIN \`$DB\`.issues target_issue ON d.depends_on_issue_id = target_issue.id
                 WHERE d.issue_id = w.id
@@ -379,7 +380,7 @@ while IFS= read -r DB; do
                 )
             )
             AND NOT EXISTS (
-                SELECT 1 FROM \`$DB\`.dependencies d
+                SELECT 1 FROM \`$DB\`.wisp_dependencies d
                 LEFT JOIN \`$DB\`.wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
                 LEFT JOIN \`$DB\`.issues target_issue ON d.depends_on_issue_id = target_issue.id
                 WHERE d.issue_id = w.id
@@ -391,6 +392,9 @@ while IFS= read -r DB; do
             )
         "
         CLOSE_WISP_BATCH=$SQL_COUNT_RESULT
+        if [ "$CLOSE_WISP_BATCH" -gt 0 ] && [ -n "$DRY_RUN" ]; then
+            TOTAL_WOULD_CLOSE_WISPS=$((TOTAL_WOULD_CLOSE_WISPS + CLOSE_WISP_BATCH))
+        fi
         if [ "$CLOSE_WISP_BATCH" -eq 0 ] || [ -n "$DRY_RUN" ]; then
             break
         fi
@@ -405,7 +409,7 @@ while IFS= read -r DB; do
                     WHERE w.status IN ('open', 'hooked', 'in_progress')
                     AND w.created_at < DATE_SUB(NOW(), INTERVAL $MAX_AGE_H HOUR)
                     AND EXISTS (
-                        SELECT 1 FROM \`$DB\`.dependencies d
+                        SELECT 1 FROM \`$DB\`.wisp_dependencies d
                         LEFT JOIN \`$DB\`.wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
                         LEFT JOIN \`$DB\`.issues target_issue ON d.depends_on_issue_id = target_issue.id
                         WHERE d.issue_id = w.id
@@ -416,7 +420,7 @@ while IFS= read -r DB; do
                         )
                     )
                     AND NOT EXISTS (
-                        SELECT 1 FROM \`$DB\`.dependencies d
+                        SELECT 1 FROM \`$DB\`.wisp_dependencies d
                         LEFT JOIN \`$DB\`.wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
                         LEFT JOIN \`$DB\`.issues target_issue ON d.depends_on_issue_id = target_issue.id
                         WHERE d.issue_id = w.id
@@ -448,7 +452,7 @@ while IFS= read -r DB; do
         WHERE status = 'closed'
         AND closed_at < DATE_SUB(NOW(), INTERVAL $PURGE_AGE_H HOUR)
         AND id NOT IN (
-            SELECT DISTINCT d.depends_on_wisp_id FROM \`$DB\`.dependencies d
+            SELECT DISTINCT d.depends_on_wisp_id FROM \`$DB\`.wisp_dependencies d
             INNER JOIN \`$DB\`.wisps child_wisp ON d.issue_id = child_wisp.id
             WHERE d.type IN ('parent-child', 'tracks', 'blocks')
             AND d.depends_on_wisp_id IS NOT NULL
@@ -463,7 +467,7 @@ while IFS= read -r DB; do
             WHERE status = 'closed'
             AND closed_at < DATE_SUB(NOW(), INTERVAL $PURGE_AGE_H HOUR)
             AND id NOT IN (
-                SELECT DISTINCT d.depends_on_wisp_id FROM \`$DB\`.dependencies d
+                SELECT DISTINCT d.depends_on_wisp_id FROM \`$DB\`.wisp_dependencies d
                 INNER JOIN \`$DB\`.wisps child_wisp ON d.issue_id = child_wisp.id
                 WHERE d.type IN ('parent-child', 'tracks', 'blocks')
                 AND d.depends_on_wisp_id IS NOT NULL
@@ -607,6 +611,7 @@ fi
 
 SUMMARY="reaper — stale_wisps:$TOTAL_STALE_WISPS, closed_wisps:$TOTAL_CLOSED_WISPS, purged:$TOTAL_PURGED, sessions-pruned:$TOTAL_SESSIONS_PRUNED, closed:$TOTAL_ISSUES_CLOSED, skipped_non_city_issues:$TOTAL_STALE_ISSUES_SKIPPED, mail_wisps:$TOTAL_MAIL_WISPS"
 if [ -n "$DRY_RUN" ]; then
+    SUMMARY="$SUMMARY, would_close_wisps:$TOTAL_WOULD_CLOSE_WISPS"
     SUMMARY="$SUMMARY (dry run)"
 fi
 

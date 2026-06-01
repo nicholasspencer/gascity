@@ -19,14 +19,13 @@ Current behavior:
 Mail is NOT a SQL table — mail messages are beads (Type=message). Any
 mail cleanup must go through `bd`, never Dolt. BD-backed mail retention is
 tracked separately as `ga-w9jfl5`; until that lands, Reaper intentionally does
-not delete mail. Wisp parentage is no longer carried on the wisps row; it
-lives in `dependencies` rows with `type='parent-child'`. For the Dolt-backed
-bead store, `ParentID` is a projection from those parent-child dependencies,
-not a separate `parent_id` column for Reaper to query. Workflow step wisps can
-also be linked by `tracks` and `blocks` dependencies instead of parent-child
-edges; Reaper treats those as closure edges only when every matching target is
-closed. Non-closed wisps without any parent/tracks/blocks signal are reported
-only; they are not closed by age alone.
+not delete mail. Wisp parentage is no longer carried on the wisps row; the
+live Dolt wisp graph is stored in `wisp_dependencies` rows with
+`type='parent-child'`, `tracks`, or `blocks`. Workflow step wisps can be linked
+by `tracks` and `blocks` dependencies instead of parent-child edges; Reaper
+treats those as closure edges only when every matching target is closed.
+Non-closed wisps without any parent/tracks/blocks signal are reported only;
+they are not closed by age alone.
 Legacy `mail_delete_age` overrides do not apply to Reaper and should be
 removed or moved to the BD-backed mail cleanup tool. Legacy `databases`
 overrides from earlier formula drafts are also no longer accepted; the script
@@ -133,7 +132,7 @@ SELECT COUNT(DISTINCT w.id) FROM wisps w
 WHERE w.status IN ('open', 'hooked', 'in_progress')
 AND w.created_at < DATE_SUB(NOW(), INTERVAL <max_age_hours> HOUR)
 AND EXISTS (
-  SELECT 1 FROM dependencies d
+  SELECT 1 FROM wisp_dependencies d
   LEFT JOIN wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
   LEFT JOIN issues target_issue ON d.depends_on_issue_id = target_issue.id
   WHERE d.issue_id = w.id
@@ -144,7 +143,7 @@ AND EXISTS (
   )
 )
 AND NOT EXISTS (
-  SELECT 1 FROM dependencies d
+  SELECT 1 FROM wisp_dependencies d
   LEFT JOIN wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
   LEFT JOIN issues target_issue ON d.depends_on_issue_id = target_issue.id
   WHERE d.issue_id = w.id
@@ -162,7 +161,7 @@ SELECT COUNT(*) FROM wisps
 WHERE status = 'closed'
 AND closed_at < DATE_SUB(NOW(), INTERVAL <purge_age_hours> HOUR)
 AND id NOT IN (
-  SELECT DISTINCT d.depends_on_wisp_id FROM dependencies d
+  SELECT DISTINCT d.depends_on_wisp_id FROM wisp_dependencies d
   INNER JOIN wisps child_wisp ON d.issue_id = child_wisp.id
   WHERE d.type IN ('parent-child', 'tracks', 'blocks')
   AND d.depends_on_wisp_id IS NOT NULL
@@ -196,11 +195,10 @@ Report wisps past max_age and close only the schema-safe subset whose
 parent-child/tracks/blocks dependency targets are all closed.
 
 Wisp parentage no longer lives on the wisps row (the schema has no
-`parent_id` column); parentage is in `dependencies` rows with
-`type='parent-child'`. The SDK `ParentID` field is projected from those rows
-for Dolt-backed beads. Workflow step wisps can also use `tracks` and `blocks`
-edges, so Reaper treats those as closure edges when every matching target is
-closed. Do not close non-closed wisps by age alone.
+`parent_id` column); the live Dolt wisp graph is in `wisp_dependencies` rows
+with `type='parent-child'`, `tracks`, or `blocks`. Reaper treats those as
+closure edges when every matching target is closed. Do not close non-closed
+wisps by age alone.
 `wisp-compact.sh` promotes non-closed wisps past TTL for stuck detection.
 The close step repeats until no schema-safe candidates remain, so a stale
 multi-level child chain whose root is closed converges in one reaper run.
@@ -223,7 +221,7 @@ AND id IN (
     WHERE w.status IN ('open', 'hooked', 'in_progress')
     AND w.created_at < DATE_SUB(NOW(), INTERVAL <max_age_hours> HOUR)
     AND EXISTS (
-      SELECT 1 FROM dependencies d
+      SELECT 1 FROM wisp_dependencies d
       LEFT JOIN wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
       LEFT JOIN issues target_issue ON d.depends_on_issue_id = target_issue.id
       WHERE d.issue_id = w.id
@@ -234,7 +232,7 @@ AND id IN (
       )
     )
     AND NOT EXISTS (
-      SELECT 1 FROM dependencies d
+      SELECT 1 FROM wisp_dependencies d
       LEFT JOIN wisps target_wisp ON d.depends_on_wisp_id = target_wisp.id
       LEFT JOIN issues target_issue ON d.depends_on_issue_id = target_issue.id
       WHERE d.issue_id = w.id
@@ -272,7 +270,7 @@ DELETE FROM wisps
 WHERE status = 'closed'
 AND closed_at < DATE_SUB(NOW(), INTERVAL <purge_age_hours> HOUR)
 AND id NOT IN (
-  SELECT DISTINCT d.depends_on_wisp_id FROM dependencies d
+  SELECT DISTINCT d.depends_on_wisp_id FROM wisp_dependencies d
   INNER JOIN wisps child_wisp ON d.issue_id = child_wisp.id
   WHERE d.type IN ('parent-child', 'tracks', 'blocks')
   AND d.depends_on_wisp_id IS NOT NULL
