@@ -264,6 +264,30 @@ func TestDecorateGraphWorkflowRecipe_SetsRootMetadata(t *testing.T) {
 	}
 }
 
+func TestDecorateGraphWorkflowRecipe_RootStampsRoutedToForClaim(t *testing.T) {
+	cfg := &config.City{Agents: []config.Agent{
+		{Name: "mayor", MaxActiveSessions: intPtr(1)},
+		{Name: "control-dispatcher", MaxActiveSessions: intPtr(1)},
+	}}
+	r := &formula.Recipe{
+		Name: "wf-test",
+		Steps: []formula.RecipeStep{
+			{ID: "wf-test.root", IsRoot: true, Metadata: map[string]string{
+				"gc.kind": "workflow", "gc.formula_contract": "graph.v2",
+			}},
+			{ID: "wf-test.work", Metadata: map[string]string{}},
+		},
+	}
+	deps := Deps{Resolver: testAgentResolver{}}
+	if err := DecorateGraphWorkflowRecipe(r, nil, "src-1", "city", "test-city", "city:test", "mayor", "test--mayor", nil, "test-city", cfg, deps); err != nil {
+		t.Fatalf("DecorateGraphWorkflowRecipe: %v", err)
+	}
+	root := r.Steps[0]
+	if got := root.Metadata["gc.routed_to"]; got != "mayor" {
+		t.Errorf("root gc.routed_to = %q, want mayor", got)
+	}
+}
+
 func TestDecorateGraphWorkflowRecipe_NilRecipe(t *testing.T) {
 	err := DecorateGraphWorkflowRecipe(nil, nil, "", "", "", "", "", "", nil, "", nil, Deps{})
 	if err == nil {

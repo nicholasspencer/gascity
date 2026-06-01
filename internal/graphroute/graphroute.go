@@ -497,6 +497,11 @@ func DecorateGraphWorkflowRecipeWithDefaultBinding(recipe *formula.Recipe, route
 			step.Metadata["gc.root_store_ref"] = rootStoreRef
 		}
 		if step.IsRoot {
+			// The workflow root must carry the same persisted delivery key that
+			// runtime demand/claim readers use for child steps. Without this, a
+			// pool-routed root can be spawned-for by scale checks but never
+			// claimed by the worker, then idle-reaped.
+			step.Metadata["gc.routed_to"] = routedTo
 			step.Metadata["gc.run_target"] = routedTo
 			if sourceBeadID != "" {
 				step.Metadata["gc.source_bead_id"] = sourceBeadID

@@ -4073,6 +4073,9 @@ title = "Do work"
 	if got := root.Metadata["gc.run_target"]; got != "mayor" {
 		t.Fatalf("root gc.run_target = %q, want mayor", got)
 	}
+	if got := root.Metadata["gc.routed_to"]; got != "mayor" {
+		t.Fatalf("root gc.routed_to = %q, want mayor", got)
+	}
 	if got := root.Metadata["gc.source_bead_id"]; got != "" {
 		t.Fatalf("root gc.source_bead_id = %q, want empty", got)
 	}

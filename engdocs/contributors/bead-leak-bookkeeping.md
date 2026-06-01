@@ -68,6 +68,18 @@ control kinds, still quarantine. If `ProcessControl` already terminally closed
 the bead with `gc.final_disposition=controller_error`, the wrapper preserves
 that disposition instead of re-closing the bead as `control_quarantined`.
 
+`ga-eld2x` identified a persisted route-key leak for graph-v2 workflow roots.
+The authoring key `gc.run_target` is useful inside formulas, but the runtime
+claim path reads the persisted delivery key `gc.routed_to`. Before this patch,
+graph workflow roots could persist only `gc.run_target`; scale checks could
+spawn a worker for the root, but the worker could not claim it, so the work
+could sit open until idle cleanup. Both graph workflow decorators now stamp
+`gc.routed_to` on roots. `gc doctor --fix` also has a
+`run-target-routed-to-backfill` check that repairs existing workflow roots by
+copying `gc.run_target` to `gc.routed_to` when the canonical key is missing.
+The hook regression coverage now encodes that boundary: run-target-only roots
+are legacy repair candidates, not claimable work-query routes.
+
 `TestGastownIdleOpenBeadCountsStayBounded` now runs in Tier B nightly
 acceptance. `.github/workflows/nightly.yml` schedules the Tier B job daily at
 06:00 UTC and calls `make test-acceptance-b`; the Makefile target runs
@@ -116,6 +128,7 @@ Dolt log. Unverified legacy markers still stop before any force-push.
 | --- | --- | --- |
 | `internal/molecule/graph_apply.go` graph workflow instantiation | Wisp root plus logical/step wisps. Non-root graph steps are linked to the root with `tracks`; explicit ordering uses `blocks`; legacy containment uses `parent-child`. | Normal workflow execution closes runnable steps. `molecule.CloseSubtree` closes owned descendants during explicit cleanup. `reaper.sh` now closes stale leftovers when all reaper-owned dependency targets are closed. |
 | `cmd/gc/order_dispatch.go` order dispatch | Ephemeral order-tracking bead labeled `gc:order-tracking`; wisp orders also create a molecule/wisp root via `molecule.Instantiate`. | `dispatchOne` defers `closeOrderTrackingBead`. Wisp roots are intentionally not auto-closed solely because descendants finish; the reaper handles stale roots/steps only when dependency evidence proves closure is safe. |
+| Graph-v2 routing decorators in `internal/graphroute/graphroute.go` and `cmd/gc/cmd_sling.go` | Workflow roots plus routed child steps. `gc.run_target` remains a formula-authoring hint; `gc.routed_to` is the persisted claim key. | Patched roots now persist `gc.routed_to` so the runtime claim path can see them. Existing roots can be backfilled by `gc doctor --fix` through `run-target-routed-to-backfill`. |
 | `cmd/gc/bead_policy_store.go` storage policy wrapper | Applies default ephemeral storage to wisp/order-tracking policies and no-history storage to session/wait/nudge policies. | Policy only selects storage tier; lifecycle is owned by the creating subsystem and maintenance scripts. |
 | Session pool creation in `cmd/gc/build_desired_state.go` and lifecycle paths | Session beads, including generic ephemeral session beads for managed pools. | Session lifecycle/reconciler close or retire sessions. `reaper.sh` prunes closed `gm-*` session beads through `bd prune` and prunes terminal drained session states through `gc session prune`; orphan-sweep preserves live ephemeral session assignees. |
 | Convoy and API helper paths under `cmd/gc/` and `internal/api/` | User-visible issue-tier convoys/tasks plus dependency edges such as `tracks`. | User/controller workflow owns closure. These are not age-reaped unless they are wisp-tier stale closure candidates. |
@@ -129,6 +142,7 @@ Dolt log. Unverified legacy markers still stop before any force-push.
 | `internal/molecule/cleanup.go` | Close molecule subtrees by ownership metadata and parent-child descendants. | Handles explicit teardown, not abandoned workflow drift. |
 | `cmd/gc/wisp_gc.go` / `wisp autoclose` | Close attached workflow roots and owned workflow beads from CLI-driven cleanup. Purge expired closed wisps, order-tracking beads, and closed graph-v2 workflow-root closures. | Patched to include workflow-root closure GC through indexed metadata queries guarded by `sourceworkflow.IsWorkflowRoot`. |
 | `cmd/gc/order_dispatch.go` | Close order-tracking beads after dispatch attempt completion. | Existing defer is the primary owner; stale tracking-bead bugs should be treated as order-dispatch defects. |
+| `cmd/gc/doctor_run_target_backfill.go` | Mechanical repair for workflow roots with `gc.run_target` but missing `gc.routed_to`. | New `gc doctor --fix` check backfills the canonical claim key without touching non-workflow beads or already-routed roots. |
 
 ## Verification Snapshot
 
@@ -150,10 +164,14 @@ Dolt log. Unverified legacy markers still stop before any force-push.
 - `go test -tags acceptance_b -timeout 3m ./test/acceptance/tier_b -run 'Test(IdleBeadStabilityProbeConfigReadsNightlyOverrides|GastownIdleOpenBeadCountsStayBounded)$' -count=1`
   passed for the nightly idle-probe override parser and the default-duration
   idle stability probe.
+- `go test ./internal/graphroute -run 'TestDecorateGraphWorkflowRecipe_(RootStampsRoutedToForClaim|SetsRootMetadata)$' -count=1`
+  passed for graph workflow root route stamping.
+- `go test ./cmd/gc -run 'Test(RunTargetRoutedToBackfillCheck|InstantiateSlingFormulaGraphWorkflowPreservesRoutedTo|BatchOnGraphWorkflowStartsWorkflowWithoutRoutingChild|DoctorCheckNamesGolden|CmdHookIgnoresRunTargetOnlyRoot)$' -count=1`
+  passed for the sling-side route stamping and doctor backfill path.
 - `go vet ./...` and `git diff --check` passed.
 - `.githooks/pre-commit` ran with `core.hooksPath=.githooks`; it failed in
   unrelated baseline `cmd/gc` shards. Latest log directory:
-  `/data/tmp/gc-local-tests.8FkCAz`.
+  `/data/tmp/gc-local-tests.URxVf6`.
 
 ## Remaining Work
 
@@ -207,6 +225,11 @@ Dolt log. Unverified legacy markers still stop before any force-push.
   `session=24` older than 24h by `created_at`. This live city is not idle, so
   the raw threshold remains a live backlog acceptance gap rather than proof of
   an idle-city leak.
+- Live read-only route-key inspection at 2026-06-01 found `137` `ga.wisps`
+  workflow roots with `gc.run_target` and missing `gc.routed_to`: `128` closed,
+  `5` in progress, and `4` open. `mc.wisps` had `0`. No live backfill mutation
+  was run from this report pass; the new `gc doctor --fix` check is the repair
+  path for those legacy roots.
 - Branch reaper dry-run on the same live server after the stale-only alert
   patch reported `stale_wisps:115`, `mail_wisps:134`, `would_close_wisps:0`,
   and made no escalation mail call with `GC_REAPER_ALERT_THRESHOLD=500`.

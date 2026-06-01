@@ -491,12 +491,11 @@ esac
 	}
 }
 
-// TestCmdHookClaimsRunTargetOnlyRoot is the #2763 end-to-end regression: a
-// graph.v2 workflow root routed to a pool stamps only gc.run_target (no
-// gc.routed_to), yet `gc hook <pool>` must surface it. Before the reader fix
-// the worker's claim query matched only gc.routed_to, so the routed root was
-// never claimed and the spawned worker idle-reaped with the work orphaned.
-func TestCmdHookClaimsRunTargetOnlyRoot(t *testing.T) {
+// TestCmdHookIgnoresRunTargetOnlyRoot locks the migration boundary:
+// gc.run_target is formula-authoring metadata, not a persisted work-query route.
+// Legacy roots with only gc.run_target are repaired by gc doctor --fix, while
+// hooks claim the gc.routed_to wire key.
+func TestCmdHookIgnoresRunTargetOnlyRoot(t *testing.T) {
 	disableManagedDoltRecoveryForTest(t)
 	clearInheritedCityRoutingEnv(t)
 	cityDir := t.TempDir()
@@ -513,7 +512,7 @@ name = "worker"
 	if err := os.WriteFile(filepath.Join(cityDir, "city.toml"), []byte(cityToml), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	// Fake bd returns the routed root only for the gc.run_target predicate;
+	// Fake bd returns the legacy root only for the gc.run_target predicate;
 	// gc.routed_to (and every other query) yields an empty queue.
 	script := `#!/bin/sh
 case "$*" in
@@ -531,11 +530,11 @@ esac
 
 	var stdout, stderr bytes.Buffer
 	code := cmdHook([]string{"worker"}, &stdout, &stderr)
-	if code != 0 {
-		t.Fatalf("cmdHook(worker) = %d, want 0; stdout=%q stderr=%s", code, stdout.String(), stderr.String())
+	if code != 1 {
+		t.Fatalf("cmdHook(worker) = %d, want 1 for run_target-only root; stdout=%q stderr=%s", code, stdout.String(), stderr.String())
 	}
-	if !strings.Contains(stdout.String(), `"graph-root"`) {
-		t.Fatalf("gc hook did not surface the run_target-only graph root: stdout=%q", stdout.String())
+	if strings.Contains(stdout.String(), `"graph-root"`) {
+		t.Fatalf("gc hook surfaced run_target-only graph root without routed_to backfill: stdout=%q", stdout.String())
 	}
 }
 

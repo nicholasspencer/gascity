@@ -1174,6 +1174,10 @@ func decorateGraphWorkflowRecipe(recipe *formula.Recipe, routeVars map[string]st
 			step.Metadata = maps.Clone(step.Metadata)
 		}
 		if step.IsRoot {
+			// Keep this mirror of graphroute.DecorateGraphWorkflowRecipe in
+			// sync: graph.v2 roots must persist the canonical claim key, not
+			// gc.run_target alone.
+			step.Metadata["gc.routed_to"] = routedTo
 			step.Metadata["gc.run_target"] = routedTo
 			continue
 		}

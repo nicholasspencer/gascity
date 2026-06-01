@@ -1,0 +1,111 @@
+package main
+
+import (
+	"fmt"
+	"strings"
+	"testing"
+
+	"github.com/gastownhall/gascity/internal/beads"
+	"github.com/gastownhall/gascity/internal/config"
+	"github.com/gastownhall/gascity/internal/doctor"
+)
+
+func TestRunTargetRoutedToBackfillCheck(t *testing.T) {
+	cityDir := t.TempDir()
+	rigDir := t.TempDir()
+	cfg := &config.City{Rigs: []config.Rig{{Name: "repo", Path: rigDir}}}
+
+	cityStore := beads.NewMemStoreFrom(0, []beads.Bead{
+		{ID: "WR-1", Title: "root", Type: "task", Status: "open", Metadata: map[string]string{
+			"gc.kind": "workflow", "gc.run_target": "mayor",
+		}},
+		{ID: "WR-2", Title: "root", Type: "task", Status: "open", Metadata: map[string]string{
+			"gc.kind": "workflow", "gc.run_target": "mayor", "gc.routed_to": "mayor",
+		}},
+		{ID: "T-1", Title: "work", Type: "task", Status: "open", Metadata: map[string]string{
+			"gc.run_target": "mayor",
+		}},
+	}, nil)
+	rigStore := beads.NewMemStoreFrom(0, []beads.Bead{
+		{ID: "RR-1", Title: "root", Type: "task", Status: "open", Metadata: map[string]string{
+			"gc.kind": "workflow", "gc.run_target": "repo/polecat",
+		}},
+	}, nil)
+	stores := map[string]beads.Store{cityDir: cityStore, rigDir: rigStore}
+	factory := func(path string) (beads.Store, error) {
+		store, ok := stores[path]
+		if !ok {
+			return nil, fmt.Errorf("unexpected store path %q", path)
+		}
+		return store, nil
+	}
+
+	check := newRunTargetRoutedToBackfillCheck(cfg, cityDir, factory)
+
+	res := check.Run(&doctor.CheckContext{})
+	if res.Status != doctor.StatusWarning {
+		t.Fatalf("Run status = %v, want warning: %#v", res.Status, res)
+	}
+	details := strings.Join(res.Details, "\n")
+	for _, want := range []string{"WR-1", "RR-1"} {
+		if !strings.Contains(details, want) {
+			t.Fatalf("details missing %q:\n%s", want, details)
+		}
+	}
+	for _, notWant := range []string{"WR-2", "T-1"} {
+		if strings.Contains(details, notWant) {
+			t.Fatalf("details should not mention %q:\n%s", notWant, details)
+		}
+	}
+
+	if err := check.Fix(&doctor.CheckContext{}); err != nil {
+		t.Fatalf("Fix: %v", err)
+	}
+
+	if res2 := check.Run(&doctor.CheckContext{}); res2.Status != doctor.StatusOK {
+		t.Fatalf("post-fix Run status = %v, want OK: %#v", res2.Status, res2)
+	}
+
+	wr1, err := cityStore.Get("WR-1")
+	if err != nil {
+		t.Fatalf("get WR-1: %v", err)
+	}
+	if got := wr1.Metadata["gc.routed_to"]; got != "mayor" {
+		t.Errorf("WR-1 gc.routed_to = %q, want mayor", got)
+	}
+	rr1, err := rigStore.Get("RR-1")
+	if err != nil {
+		t.Fatalf("get RR-1: %v", err)
+	}
+	if got := rr1.Metadata["gc.routed_to"]; got != "repo/polecat" {
+		t.Errorf("RR-1 gc.routed_to = %q, want repo/polecat", got)
+	}
+	t1, err := cityStore.Get("T-1")
+	if err != nil {
+		t.Fatalf("get T-1: %v", err)
+	}
+	if got := t1.Metadata["gc.routed_to"]; got != "" {
+		t.Errorf("T-1 gc.routed_to = %q, want empty", got)
+	}
+}
+
+func TestRunTargetRoutedToBackfillCheckCleanStore(t *testing.T) {
+	cityDir := t.TempDir()
+	store := beads.NewMemStoreFrom(0, []beads.Bead{
+		{ID: "WR-9", Title: "root", Type: "task", Status: "open", Metadata: map[string]string{
+			"gc.kind": "workflow", "gc.run_target": "mayor", "gc.routed_to": "mayor",
+		}},
+	}, nil)
+	check := newRunTargetRoutedToBackfillCheck(nil, cityDir, func(path string) (beads.Store, error) {
+		if path != cityDir {
+			return nil, fmt.Errorf("unexpected store path %q", path)
+		}
+		return store, nil
+	})
+	if !check.CanFix() {
+		t.Fatal("CanFix() = false, want true")
+	}
+	if res := check.Run(&doctor.CheckContext{}); res.Status != doctor.StatusOK {
+		t.Fatalf("Run status = %v, want OK: %#v", res.Status, res)
+	}
+}
