@@ -41,6 +41,17 @@ edges and no issue-level dependencies. Those rows are stranded before graph
 wiring completes, so the reaper now closes only that isolated generated-spec
 shape. Ordinary no-edge wisps remain report-only.
 
+Live inspection found another boundedness gap in session beads. Several old
+session wisps were `state=asleep` with `sleep_reason=drained` but lacked
+`slept_at`, so `gc session prune --state asleep` skipped them forever.
+`PruneDetailed` now treats that legacy drained-asleep shape as eligible for
+`StateDrained` pruning and falls back to the bead `UpdatedAt` timestamp only
+when `slept_at` is missing, not malformed. The reaper's live path now runs
+`gc session prune --state drained --before ${GC_REAPER_SESSION_STATE_PRUNE_AGE:-24h} --json`,
+adds the result to `sessions-pruned`, and escalates nonzero prune
+failures. Dry-run skips this mutating CLI path because `gc session prune` has no
+preview mode today.
+
 `ga-6pbt8` identified that `runControlDispatcherWithStoreAndConfig`
 hard-quarantined every `ProcessControl` error except `ErrControlPending`.
 That swallowed transient store/controller faults before the serve loop could use
@@ -86,14 +97,14 @@ review artifact is visible from the failed run output.
 | `internal/molecule/graph_apply.go` graph workflow instantiation | Wisp root plus logical/step wisps. Non-root graph steps are linked to the root with `tracks`; explicit ordering uses `blocks`; legacy containment uses `parent-child`. | Normal workflow execution closes runnable steps. `molecule.CloseSubtree` closes owned descendants during explicit cleanup. `reaper.sh` now closes stale leftovers when all reaper-owned dependency targets are closed. |
 | `cmd/gc/order_dispatch.go` order dispatch | Ephemeral order-tracking bead labeled `gc:order-tracking`; wisp orders also create a molecule/wisp root via `molecule.Instantiate`. | `dispatchOne` defers `closeOrderTrackingBead`. Wisp roots are intentionally not auto-closed solely because descendants finish; the reaper handles stale roots/steps only when dependency evidence proves closure is safe. |
 | `cmd/gc/bead_policy_store.go` storage policy wrapper | Applies default ephemeral storage to wisp/order-tracking policies and no-history storage to session/wait/nudge policies. | Policy only selects storage tier; lifecycle is owned by the creating subsystem and maintenance scripts. |
-| Session pool creation in `cmd/gc/build_desired_state.go` and lifecycle paths | Session beads, including generic ephemeral session beads for managed pools. | Session lifecycle/reconciler close or retire sessions. `reaper.sh` prunes closed `gm-*` session beads through `bd prune`; orphan-sweep preserves live ephemeral session assignees. |
+| Session pool creation in `cmd/gc/build_desired_state.go` and lifecycle paths | Session beads, including generic ephemeral session beads for managed pools. | Session lifecycle/reconciler close or retire sessions. `reaper.sh` prunes closed `gm-*` session beads through `bd prune` and prunes terminal drained session states through `gc session prune`; orphan-sweep preserves live ephemeral session assignees. |
 | Convoy and API helper paths under `cmd/gc/` and `internal/api/` | User-visible issue-tier convoys/tasks plus dependency edges such as `tracks`. | User/controller workflow owns closure. These are not age-reaped unless they are wisp-tier stale closure candidates. |
 
 ## Cleanup Paths
 
 | Path | Responsibility | Current status |
 | --- | --- | --- |
-| `examples/gastown/packs/maintenance/assets/scripts/reaper.sh` | Close stale non-closed wisps with closed dependency targets; close isolated generated step-spec debris; purge old closed wisps; auto-close stale city issues; prune closed `gm-*` session beads. | Patched for `parent-child`/`tracks`/`blocks` closure and purge protection through `wisp_dependencies`, plus a narrow unassigned `Step spec for ...` no-edge cleanup. |
+| `examples/gastown/packs/maintenance/assets/scripts/reaper.sh` | Close stale non-closed wisps with closed dependency targets; close isolated generated step-spec debris; purge old closed wisps; auto-close stale city issues; prune closed `gm-*` session beads; prune terminal drained session-state beads. | Patched for `parent-child`/`tracks`/`blocks` closure and purge protection through `wisp_dependencies`, plus a narrow unassigned `Step spec for ...` no-edge cleanup and a `gc session prune --state drained` pass for legacy drained-asleep session rows. |
 | `examples/gastown/packs/maintenance/assets/scripts/wisp-compact.sh` | Promote old non-closed ephemeral beads for stuck detection and delete expired closed wisps. | Still separate from the safe-close decision. It must not become an age-only closer. |
 | `internal/molecule/cleanup.go` | Close molecule subtrees by ownership metadata and parent-child descendants. | Handles explicit teardown, not abandoned workflow drift. |
 | `cmd/gc/wisp_gc.go` / `wisp autoclose` | Close attached workflow roots and owned workflow beads from CLI-driven cleanup. Purge expired closed wisps, order-tracking beads, and closed graph-v2 workflow-root closures. | Patched to include workflow-root closure GC through indexed metadata queries guarded by `sourceworkflow.IsWorkflowRoot`. |
@@ -103,6 +114,10 @@ review artifact is visible from the failed run output.
 
 - `go test ./examples/gastown -count=1` passed for the reaper and wisp-GC
   changes.
+- `go test ./internal/session -count=1` passed for the session prune timestamp
+  and drained-asleep alias changes.
+- `go test ./cmd/gc -run 'TestCmdSessionPrune|TestSessionActionJSONSchema' -count=1`
+  passed for the session prune CLI surface.
 - `go test ./examples/dolt -count=1` passed for the compactor endpoint change.
 - `go test -tags acceptance_b -timeout 10m -v ./test/acceptance/tier_b -run TestGastownIdleOpenBeadCountsStayBounded`
   passed on 2026-06-01, proving the nightly idle Gastown regression runs
@@ -139,3 +154,8 @@ review artifact is visible from the failed run output.
   `created_at=2026-05-20T11:14:29Z`; the dry-run output now reports those marker
   details directly. That marker requires separate manual integrity review before
   live compaction or full GC can run for `mc`.
+- Live session-bead inspection on 2026-06-01 found stale `mc` session wisps
+  shaped as `state=asleep` plus `sleep_reason=drained` with missing `slept_at`;
+  the current patch makes those rows closeable by the reaper's drained-state
+  prune pass. The branch reaper session-state prune has not yet been run
+  destructively against `/data/projects/maintainer-city` after this patch.
