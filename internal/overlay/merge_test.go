@@ -80,15 +80,17 @@ func TestMergeSettingsJSON_CanonicalizesCommandsWithoutHTMLEscaping(t *testing.T
 }
 
 func TestMergeSettingsJSON_SameMatcherReplacement(t *testing.T) {
-	// Crew scenario: overlay changes PreCompact catch-all command.
+	// Same NON-EMPTY matcher: overlay replaces the base entry in place.
+	// (Empty-matcher entries are instead keyed by their inner command — distinct
+	// commands coexist — see TestMergeSettingsJSON_WrapBareHooks_TwoEmptyMatchersNoLoss.)
 	base := `{
 		"hooks": {
-			"PreCompact": [{"matcher": "", "hooks": [{"type": "command", "command": "gc prime"}]}]
+			"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "guard-old"}]}]
 		}
 	}`
 	over := `{
 		"hooks": {
-			"PreCompact": [{"matcher": "", "hooks": [{"type": "command", "command": "gc handoff --auto \"context cycle\""}]}]
+			"PreToolUse": [{"matcher": "Bash", "hooks": [{"type": "command", "command": "guard-new"}]}]
 		}
 	}`
 
@@ -102,15 +104,15 @@ func TestMergeSettingsJSON_SameMatcherReplacement(t *testing.T) {
 		t.Fatalf("unmarshal result: %v", err)
 	}
 	hooks := doc["hooks"].(map[string]any)
-	arr := hooks["PreCompact"].([]any)
+	arr := hooks["PreToolUse"].([]any)
 	if len(arr) != 1 {
-		t.Fatalf("PreCompact entries = %d, want 1", len(arr))
+		t.Fatalf("PreToolUse entries = %d, want 1", len(arr))
 	}
 	entry := arr[0].(map[string]any)
 	innerHooks := entry["hooks"].([]any)
 	cmd := innerHooks[0].(map[string]any)["command"].(string)
-	if cmd != `gc handoff --auto "context cycle"` {
-		t.Errorf("PreCompact command = %q, want gc handoff", cmd)
+	if cmd != "guard-new" {
+		t.Errorf("PreToolUse command = %q, want guard-new", cmd)
 	}
 }
 
@@ -350,7 +352,10 @@ func TestMergeSettingsJSON_WitnessScenario(t *testing.T) {
 }
 
 func TestMergeSettingsJSON_CrewScenario(t *testing.T) {
-	// Full crew scenario: base has 4 hooks, overlay overrides PreCompact only.
+	// Full crew scenario: base has 4 categories; overlay contributes another
+	// PreCompact hook with a distinct command. Under inner-command identity the
+	// overlay ADDS its hook without dropping the base's (no-loss); the base's
+	// other three categories are untouched.
 	base := `{
 		"hooks": {
 			"SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "gc prime"}]}],
@@ -382,21 +387,26 @@ func TestMergeSettingsJSON_CrewScenario(t *testing.T) {
 			t.Errorf("missing category %q", cat)
 		}
 	}
-	// PreCompact replaced.
+	// PreCompact: base's gc prime preserved AND overlay's gc handoff added (no-loss).
 	arr := hooks["PreCompact"].([]any)
-	if len(arr) != 1 {
-		t.Fatalf("PreCompact entries = %d, want 1", len(arr))
+	if len(arr) != 2 {
+		t.Fatalf("PreCompact entries = %d, want 2 (no-loss)", len(arr))
 	}
-	entry := arr[0].(map[string]any)
-	innerHooks := entry["hooks"].([]any)
-	cmd := innerHooks[0].(map[string]any)["command"].(string)
-	if cmd != `gc handoff --auto "context cycle"` {
-		t.Errorf("PreCompact command = %q, want gc handoff", cmd)
+	cmds := map[string]bool{}
+	for _, e := range arr {
+		inner := e.(map[string]any)["hooks"].([]any)
+		cmds[inner[0].(map[string]any)["command"].(string)] = true
+	}
+	if !cmds["gc prime"] || !cmds[`gc handoff --auto "context cycle"`] {
+		t.Errorf("PreCompact commands = %v, want both gc prime and gc handoff", cmds)
 	}
 }
 
 func TestMergeSettingsJSON_BackwardCompat_FullOverlay(t *testing.T) {
-	// When overlay contains all hooks (legacy full copy), result equals overlay content.
+	// A full overlay identical to the base is idempotent: re-applying the
+	// canonical full config is a no-op (result equals the overlay). Under
+	// inner-command identity, matching empty-matcher commands dedupe in place
+	// rather than duplicate.
 	full := `{
 		"hooks": {
 			"SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "gc prime"}]}],
@@ -405,14 +415,7 @@ func TestMergeSettingsJSON_BackwardCompat_FullOverlay(t *testing.T) {
 			"Stop": [{"matcher": "", "hooks": [{"type": "command", "command": "gc hook --inject"}]}]
 		}
 	}`
-	base := `{
-		"hooks": {
-			"SessionStart": [{"matcher": "", "hooks": [{"type": "command", "command": "gc prime"}]}],
-			"PreCompact": [{"matcher": "", "hooks": [{"type": "command", "command": "gc prime"}]}],
-			"UserPromptSubmit": [{"matcher": "", "hooks": [{"type": "command", "command": "gc mail check --inject"}]}],
-			"Stop": [{"matcher": "", "hooks": [{"type": "command", "command": "gc hook --inject"}]}]
-		}
-	}`
+	base := full
 
 	result, err := MergeSettingsJSON([]byte(base), []byte(full))
 	if err != nil {
@@ -611,6 +614,73 @@ func TestMergeSettingsJSON_WrapBareHooks_PreservesDistinctBareEntries(t *testing
 	}
 	if !seen["a"] || !seen["b"] {
 		t.Errorf("expected both commands a and b preserved, got %v", seen)
+	}
+}
+
+func TestMergeSettingsJSON_WrapBareHooks_TwoEmptyMatchersNoLoss(t *testing.T) {
+	// The embedded base ships real empty-matcher entries (PreCompact,
+	// UserPromptSubmit in internal/hooks/config/claude.json). Adding another
+	// empty-matcher hook must NOT collapse them onto the matcher:"" key and
+	// silently drop a base hook — each is keyed by its inner command.
+	base := `{"hooks":{"UserPromptSubmit":[
+		{"matcher":"","hooks":[{"type":"command","command":"gc nudge drain --inject"}]},
+		{"matcher":"","hooks":[{"type":"command","command":"gc mail check --inject"}]}
+	]}}`
+	over := `{"hooks":{"UserPromptSubmit":[{"matcher":"","hooks":[{"type":"command","command":"ubs --inject"}]}]}}`
+
+	result, err := MergeSettingsJSON([]byte(base), []byte(over), WithWrapBareHooks())
+	if err != nil {
+		t.Fatalf("MergeSettingsJSON: %v", err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(result, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	arr := doc["hooks"].(map[string]any)["UserPromptSubmit"].([]any)
+	if len(arr) != 3 {
+		t.Fatalf("UserPromptSubmit entries = %d, want 3 (no-loss)", len(arr))
+	}
+	seen := map[string]bool{}
+	for _, e := range arr {
+		inner := e.(map[string]any)["hooks"].([]any)
+		seen[inner[0].(map[string]any)["command"].(string)] = true
+	}
+	for _, want := range []string{"gc nudge drain --inject", "gc mail check --inject", "ubs --inject"} {
+		if !seen[want] {
+			t.Errorf("missing command %q (data loss); got %v", want, seen)
+		}
+	}
+}
+
+func TestMergeSettingsJSON_WrapBareHooks_ReMergeIdempotent(t *testing.T) {
+	// Merging the overlay into an already-merged result must be a no-op: the
+	// overlay's (now-wrapped) bare entry dedupes against its copy in the result
+	// instead of re-appending on every reinstall, and base hooks are preserved.
+	base := `{"hooks":{"UserPromptSubmit":[{"matcher":"","hooks":[{"type":"command","command":"gc mail check --inject"}]}]}}`
+	over := `{"hooks":{"PreToolUse":[{"type":"command","command":"ubs"}]}}`
+
+	first, err := MergeSettingsJSON([]byte(base), []byte(over), WithWrapBareHooks())
+	if err != nil {
+		t.Fatalf("first merge: %v", err)
+	}
+	second, err := MergeSettingsJSON(first, []byte(over), WithWrapBareHooks())
+	if err != nil {
+		t.Fatalf("second merge: %v", err)
+	}
+	if string(first) != string(second) {
+		t.Errorf("merge not idempotent:\nfirst:  %s\nsecond: %s", first, second)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(second, &doc); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	ups := doc["hooks"].(map[string]any)["UserPromptSubmit"].([]any)
+	if len(ups) != 1 {
+		t.Errorf("UserPromptSubmit entries = %d, want 1 (base hook preserved once)", len(ups))
+	}
+	ptu := doc["hooks"].(map[string]any)["PreToolUse"].([]any)
+	if len(ptu) != 1 {
+		t.Errorf("PreToolUse entries = %d, want 1 (overlay hook not re-appended)", len(ptu))
 	}
 }
 

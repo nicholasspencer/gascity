@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"strings"
 )
 
 // mergeablePaths is the set of relative paths that get JSON-level merge
@@ -78,17 +79,19 @@ func WithWrapBareHooks() MergeOption {
 // Merge semantics:
 //   - Non-hook top-level keys: last writer (overlay) wins.
 //   - Hook categories (keys under "hooks"): union across layers.
+//   - With WithWrapBareHooks, bare entries in BOTH inputs are normalized into
+//     wrapped {"matcher": "", "hooks": [entry]} form BEFORE the keyed merge, so
+//     identities are computed on the canonical shape.
 //   - Entries within a hook category: merged by identity key.
 //     Same identity → overlay replaces base entry. New identity → appended.
-//   - Identity key extraction:
-//     1. "matcher" key → identity is the matcher value
-//     2. "command" key → identity is "cmd:<value>"
-//     3. "bash" key → identity is "bash:<value>"
-//     4. else → no identity, always append
-//   - With WithWrapBareHooks, a final pass over the merged hooks normalizes any
-//     bare entry (one with neither a "matcher" nor a "hooks" key) into
-//     {"matcher": "", "hooks": [entry]}. This runs after the keyed merge so no
-//     entries are dropped or reordered; it only fixes the shape Claude requires.
+//   - Identity key extraction (hookEntryKey):
+//   - wrapped entry, non-empty matcher → "matcher:<value>"
+//   - wrapped entry, empty matcher     → "wrapped:<inner command signature>"
+//     (so distinct empty-matcher entries — including normalized bare entries —
+//     coexist and re-merge idempotently instead of all colliding on
+//     matcher:"" and silently dropping base hooks like PreCompact)
+//   - bare "command"/"bash" (non-wrap paths) → "cmd:<value>"/"bash:<value>"
+//   - else → no identity, always append
 //
 // Returns pretty-printed JSON.
 func MergeSettingsJSON(base, overlay []byte, opts ...MergeOption) ([]byte, error) {
@@ -112,23 +115,33 @@ func MergeSettingsJSON(base, overlay []byte, opts ...MergeOption) ([]byte, error
 		result[k] = v
 	}
 
+	// For wrap-style providers (Claude settings), normalize bare hook entries
+	// into wrapped {"matcher": "", "hooks": [entry]} form on BOTH inputs BEFORE
+	// the keyed merge. Wrapping pre-merge (rather than as a final pass) is what
+	// makes the merge correct and idempotent: identity keys are then computed on
+	// the canonical shape, so a bare overlay entry dedupes against its already-
+	// wrapped base copy instead of re-appending each reinstall, and distinct
+	// empty-matcher entries are keyed by their inner command instead of all
+	// collapsing to matcher:"" (which would silently drop base hooks such as
+	// PreCompact/UserPromptSubmit on the next re-merge).
+	baseHooks := toMapStringAny(baseDoc["hooks"])
+	if cfg.wrapBareHooks {
+		baseHooks = wrapBareHookEntries(baseHooks)
+		if len(baseHooks) > 0 {
+			result["hooks"] = baseHooks
+		}
+	}
+
 	for k, v := range overDoc {
 		if k == "hooks" {
-			baseHooks := toMapStringAny(baseDoc["hooks"])
 			overHooks := toMapStringAny(v)
+			if cfg.wrapBareHooks {
+				overHooks = wrapBareHookEntries(overHooks)
+			}
 			result["hooks"] = mergeHooksMap(baseHooks, overHooks)
 		} else {
 			// Non-hook keys: last writer wins.
 			result[k] = v
-		}
-	}
-
-	// For wrap-style providers, normalize any bare hook entry into wrapped form.
-	// Done after the merge so identity/merge semantics, ordering, and entry
-	// count are untouched — this only fixes the shape (Claude validity).
-	if cfg.wrapBareHooks {
-		if hooks, ok := result["hooks"].(map[string]any); ok {
-			result["hooks"] = wrapBareHookEntries(hooks)
 		}
 	}
 
@@ -237,9 +250,30 @@ func mergeHookArray(base, over []any) []any {
 	return result
 }
 
-// hookEntryKey extracts the identity key from a hook entry.
-// Returns the key string and true if an identity was found.
+// hookEntryKey extracts a stable identity for a hook entry so an overlay entry
+// replaces (rather than duplicates) the matching base entry across re-merges.
+// Returns the key and true if an identity was found.
+//
+// Wrapped entries ({"matcher": ..., "hooks": [...]}) are keyed by a non-empty
+// matcher, or — when the matcher is empty — by a signature of their inner hook
+// commands. Keying empty-matcher entries by the matcher alone would collapse
+// every such entry (including bare entries normalized to matcher:"") onto one
+// key and silently drop all but one on the next merge. Non-wrapped shapes keep
+// the legacy matcher / "cmd:" / "bash:" keys (Codex/Cursor hooks.json).
 func hookEntryKey(entry map[string]any) (string, bool) {
+	if _, hasHooks := entry["hooks"]; hasHooks {
+		if m, ok := entry["matcher"].(string); ok && m != "" {
+			return "matcher:" + m, true
+		}
+		if sig, ok := innerHookSignature(entry["hooks"]); ok {
+			return "wrapped:" + sig, true
+		}
+		// Empty matcher and no usable inner signature: fall back to the matcher.
+		if m, ok := entry["matcher"].(string); ok {
+			return "matcher:" + m, true
+		}
+		return "", false
+	}
 	if v, ok := entry["matcher"]; ok {
 		s, sok := v.(string)
 		if !sok {
@@ -262,6 +296,42 @@ func hookEntryKey(entry map[string]any) (string, bool) {
 		return "bash:" + s, true
 	}
 	return "", false
+}
+
+// innerHookSignature builds a stable identity from a wrapped entry's inner
+// "hooks" array by joining each inner hook's command (or bash) value. Returns
+// false if the array is empty or any inner hook lacks a string command/bash, in
+// which case the caller falls back to the matcher identity.
+func innerHookSignature(hooksVal any) (string, bool) {
+	arr, ok := toSliceAny(hooksVal)
+	if !ok || len(arr) == 0 {
+		return "", false
+	}
+	parts := make([]string, 0, len(arr))
+	for _, h := range arr {
+		hm, ok := h.(map[string]any)
+		if !ok {
+			return "", false
+		}
+		if v, ok := hm["command"]; ok {
+			s, sok := v.(string)
+			if !sok {
+				return "", false
+			}
+			parts = append(parts, "cmd:"+s)
+			continue
+		}
+		if v, ok := hm["bash"]; ok {
+			s, sok := v.(string)
+			if !sok {
+				return "", false
+			}
+			parts = append(parts, "bash:"+s)
+			continue
+		}
+		return "", false
+	}
+	return strings.Join(parts, "\x1f"), true
 }
 
 // wrapBareHookEntries returns a copy of a hooks map in which every bare
