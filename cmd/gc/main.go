@@ -1083,10 +1083,9 @@ func openCityStoreWithPath(stderr io.Writer, cmdName string) (beads.Store, strin
 }
 
 // openCityStoreAt opens a bead store at the given city path.
-// Used by the controller (which already knows the city path) and by
-// openCityStore (which resolves the path first). Keep the passed city path
-// authoritative; rerouting through cityForStoreDir would let inherited
-// GC_CITY override an explicit --city resolution.
+// Command paths use this opener so native Dolt writes publish bead events.
+// Keep the passed city path authoritative; rerouting through cityForStoreDir
+// would let inherited GC_CITY override an explicit --city resolution.
 func openCityStoreAt(cityPath string) (beads.Store, error) {
 	result, err := openCityStoreResultAt(cityPath)
 	if err != nil {
@@ -1097,6 +1096,11 @@ func openCityStoreAt(cityPath string) (beads.Store, error) {
 
 func openCityStoreResultAt(cityPath string) (beads.StoreOpenResult, error) {
 	return openStoreResultAtForCity(cityPath, cityPath)
+}
+
+func openRawCityStoreResultAt(cityPath string) (beads.StoreOpenResult, error) {
+	result, _, err := openRawStoreResultAtForCity(cityPath, cityPath)
+	return result, err
 }
 
 const fileStoreLayoutScopedV1 = "scope-local-v1"
@@ -1171,6 +1175,14 @@ func openStoreAtForCity(storePath, cityPath string) (beads.Store, error) {
 }
 
 func openStoreResultAtForCity(storePath, cityPath string) (beads.StoreOpenResult, error) {
+	result, runtimeCityPath, err := openRawStoreResultAtForCity(storePath, cityPath)
+	if err != nil {
+		return beads.StoreOpenResult{}, err
+	}
+	return withCommandBeadEvents(result, openCommandBeadEventRecorder(runtimeCityPath)), nil
+}
+
+func openRawStoreResultAtForCity(storePath, cityPath string) (beads.StoreOpenResult, string, error) {
 	runtimeCityPath := cityPath
 	if runtimeCityPath == "" {
 		runtimeCityPath = cityForStoreDir(storePath)
@@ -1179,7 +1191,7 @@ func openStoreResultAtForCity(storePath, cityPath string) (beads.StoreOpenResult
 	provider := rawBeadsProviderForScope(scopeRoot, runtimeCityPath)
 	if strings.HasPrefix(provider, "exec:") && !providerUsesBdStoreContract(provider) {
 		store, err := openExecStoreAtForCity(provider, scopeRoot, runtimeCityPath)
-		return beads.StoreOpenResult{Store: store, Diagnostic: beads.ExecStoreDiagnostic()}, err
+		return beads.StoreOpenResult{Store: store, Diagnostic: beads.ExecStoreDiagnostic()}, runtimeCityPath, err
 	}
 	result, err := beads.OpenStoreAtForCity(context.Background(), beads.StoreOpenOptions{
 		ScopeRoot:        scopeRoot,
@@ -1208,9 +1220,9 @@ func openStoreResultAtForCity(storePath, cityPath string) (beads.StoreOpenResult
 		},
 	})
 	if err != nil {
-		return beads.StoreOpenResult{}, err
+		return beads.StoreOpenResult{}, runtimeCityPath, err
 	}
-	return result, nil
+	return result, runtimeCityPath, nil
 }
 
 func openExecStoreAtForCity(provider, scopeRoot, runtimeCityPath string) (beads.Store, error) {

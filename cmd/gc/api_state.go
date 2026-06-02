@@ -76,7 +76,7 @@ var beadEventWatcherRetryDelay = time.Second
 // newControllerStateOpenCityStore opens the city-level bead store for
 // newControllerState. Test code can swap this to return an in-memory store
 // and skip spawning managed dolt (~12s per call).
-var newControllerStateOpenCityStore = openCityStoreResultAt
+var newControllerStateOpenCityStore = openRawCityStoreResultAt
 
 // controllerStateOpenRigStoreAtForCity routes controller rig stores through
 // the same native-selection factory as direct city/rig store opens. Tests swap
