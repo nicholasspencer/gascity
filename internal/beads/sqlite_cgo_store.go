@@ -13,6 +13,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -66,6 +67,7 @@ type SQLiteCGOStore struct {
 	retentionSweepInterval  time.Duration
 	disableRetentionSweeper bool
 	retentionStop           chan struct{}
+	closeOnce               sync.Once
 }
 
 // OpenSQLiteCGOStore opens or creates a SQLite-CGo bead store under dir.
@@ -234,6 +236,27 @@ func (s *SQLiteCGOStore) Ping() error {
 		return fmt.Errorf("pinging sqlite-cgo store: %w", err)
 	}
 	return nil
+}
+
+// CloseStore stops the background retention sweeper and closes the underlying
+// database, releasing all SQLite (cgo) connections. It is the resource-cleanup
+// counterpart to the bead-status Close(id) method and matches the
+// CloseStore() error contract that closeBeadStoreHandle (cmd/gc) detects when
+// replacing or discarding a store. Safe to call multiple times.
+func (s *SQLiteCGOStore) CloseStore() error {
+	if s == nil {
+		return nil
+	}
+	var err error
+	s.closeOnce.Do(func() {
+		if s.retentionStop != nil {
+			close(s.retentionStop)
+		}
+		if s.db != nil {
+			err = s.db.Close()
+		}
+	})
+	return err
 }
 
 // Create persists a new bead.
