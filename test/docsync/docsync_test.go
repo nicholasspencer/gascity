@@ -661,6 +661,10 @@ func TestDocDirCoverage(t *testing.T) {
 		if strings.HasPrefix(name, ".") || name == "vendor" || name == "node_modules" {
 			continue
 		}
+		// Skip designer scratch directories (ga-* prefix = bead ID workspace).
+		if strings.HasPrefix(name, "ga-") {
+			continue
+		}
 		if known[name] {
 			continue
 		}
