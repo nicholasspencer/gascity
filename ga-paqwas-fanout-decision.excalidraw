@@ -1,0 +1,232 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "id": "bg", "type": "rectangle",
+      "x": 0, "y": 0, "width": 1100, "height": 700,
+      "angle": 0, "strokeColor": "#dee2e6", "backgroundColor": "#f8f9fa",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 1, "version": 1, "versionNonce": 1,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "title", "type": "text",
+      "x": 550, "y": 14, "width": 900, "height": 28,
+      "angle": 0, "strokeColor": "#1e1e1e", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 2, "version": 1, "versionNonce": 2,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "ga-paqwas  ·  Fan-Out Primitive: Author Decision Flow + gc validate Lint UX",
+      "fontSize": 22, "fontFamily": 3, "textAlign": "center", "verticalAlign": "top",
+      "containerId": null, "originalText": "ga-paqwas  ·  Fan-Out Primitive: Author Decision Flow + gc validate Lint UX"
+    },
+    {
+      "id": "author-start", "type": "ellipse",
+      "x": 460, "y": 65, "width": 180, "height": 50,
+      "angle": 0, "strokeColor": "#4a9eed", "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 10, "version": 1, "versionNonce": 10,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "Formula Author\nneeds fan-out", "fontSize": 15, "color": "#003a63"}
+    },
+    {
+      "id": "a-start", "type": "arrow",
+      "x": 550, "y": 115, "width": 0, "height": 35,
+      "angle": 0, "strokeColor": "#1e1e1e", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 11, "version": 1, "versionNonce": 11,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[0,35]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow"
+    },
+    {
+      "id": "q1", "type": "diamond",
+      "x": 435, "y": 150, "width": 230, "height": 70,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "#fff3bf",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 14, "version": 1, "versionNonce": 14,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "Using graph.v2\nformula?", "fontSize": 15, "color": "#7c4a00"}
+    },
+    {
+      "id": "a-q1-yes", "type": "arrow",
+      "x": 550, "y": 220, "width": 0, "height": 40,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 15, "version": 1, "versionNonce": 15,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[0,40]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow",
+      "label": {"text": "yes", "fontSize": 14}
+    },
+    {
+      "id": "a-q1-no", "type": "arrow",
+      "x": 435, "y": 185, "width": -200, "height": 0,
+      "angle": 0, "strokeColor": "#c92a2a", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 16, "version": 1, "versionNonce": 16,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[-200,0]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow",
+      "label": {"text": "no (graph.v1)", "fontSize": 13}
+    },
+    {
+      "id": "upgrade-box", "type": "rectangle",
+      "x": 85, "y": 155, "width": 150, "height": 60,
+      "angle": 0, "strokeColor": "#c92a2a", "backgroundColor": "#ffc9c9",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 17, "version": 1, "versionNonce": 17,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "Upgrade to\ngraph.v2 first,\nthen use drain", "fontSize": 13, "color": "#6a1010"}
+    },
+    {
+      "id": "drain-canon", "type": "rectangle",
+      "x": 400, "y": 260, "width": 300, "height": 80,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "#b2f2bb",
+      "fillStyle": "solid", "strokeWidth": 3, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 20, "version": 1, "versionNonce": 20,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "USE drain (DrainSpec)\nCANONICAL graph.v2 primitive", "fontSize": 16, "color": "#1a4731"}
+    },
+    {
+      "id": "drain-detail", "type": "rectangle",
+      "x": 730, "y": 250, "width": 350, "height": 110,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 21, "version": 1, "versionNonce": 21,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "drain:\n  formula: item-processor\n  max_units: 10\n  on_item_failure: skip", "fontSize": 14, "color": "#1a4731"}
+    },
+    {
+      "id": "a-drain-detail", "type": "arrow",
+      "x": 700, "y": 300, "width": 30, "height": 0,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "dashed",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 22, "version": 1, "versionNonce": 22,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[30,0]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow"
+    },
+    {
+      "id": "legacy-exists", "type": "diamond",
+      "x": 400, "y": 390, "width": 300, "height": 70,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "#fff3bf",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 25, "version": 1, "versionNonce": 25,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "Existing gc.output_json\nin this formula?", "fontSize": 14, "color": "#7c4a00"}
+    },
+    {
+      "id": "a-drain-to-q2", "type": "arrow",
+      "x": 550, "y": 340, "width": 0, "height": 50,
+      "angle": 0, "strokeColor": "#1e1e1e", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "dashed",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 26, "version": 1, "versionNonce": 26,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[0,50]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow",
+      "label": {"text": "new formula uses drain", "fontSize": 12}
+    },
+    {
+      "id": "gc-validate-warn", "type": "rectangle",
+      "x": 395, "y": 500, "width": 310, "height": 80,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "#ffd8a8",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 30, "version": 1, "versionNonce": 30,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "gc validate WARNS:\ngc.output_json is legacy;\nuse drain in graph.v2 formulas", "fontSize": 14, "color": "#7c4a00"}
+    },
+    {
+      "id": "a-q2-yes-warn", "type": "arrow",
+      "x": 550, "y": 460, "width": 0, "height": 40,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 31, "version": 1, "versionNonce": 31,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[0,40]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow",
+      "label": {"text": "yes (grandfathered)", "fontSize": 12}
+    },
+    {
+      "id": "a-q2-no", "type": "arrow",
+      "x": 700, "y": 425, "width": 100, "height": 0,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 32, "version": 1, "versionNonce": 32,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "points": [[0,0],[100,0]], "lastCommittedPoint": null, "startArrowhead": null, "endArrowhead": "arrow",
+      "label": {"text": "no", "fontSize": 13}
+    },
+    {
+      "id": "ok-box", "type": "rectangle",
+      "x": 800, "y": 400, "width": 130, "height": 50,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "#b2f2bb",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 33, "version": 1, "versionNonce": 33,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "No warning\nOK", "fontSize": 14, "color": "#1a4731"}
+    },
+    {
+      "id": "lint-terminal", "type": "rectangle",
+      "x": 10, "y": 620, "width": 1080, "height": 70,
+      "angle": 0, "strokeColor": "#1e1e1e", "backgroundColor": "#1e1e1e",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 40, "version": 1, "versionNonce": 40,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "lint-t1", "type": "text",
+      "x": 30, "y": 630, "width": 1000, "height": 18,
+      "angle": 0, "strokeColor": "#a9e34b", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 41, "version": 1, "versionNonce": 41,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "$ gc validate ./formulas/my-mol.toml",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "$ gc validate ./formulas/my-mol.toml"
+    },
+    {
+      "id": "lint-t2", "type": "text",
+      "x": 30, "y": 652, "width": 1000, "height": 18,
+      "angle": 0, "strokeColor": "#fcc419", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 42, "version": 1, "versionNonce": 42,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "WARNING my-mol.toml step:scatter  gc.output_json is legacy; use drain in graph.v2 formulas  (see: engdocs/drain-fanout.md)",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "WARNING my-mol.toml step:scatter  gc.output_json is legacy; use drain in graph.v2 formulas  (see: engdocs/drain-fanout.md)"
+    },
+    {
+      "id": "lint-t3", "type": "text",
+      "x": 30, "y": 674, "width": 1000, "height": 18,
+      "angle": 0, "strokeColor": "#74c0fc", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 43, "version": 1, "versionNonce": 43,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "1 warning  (existing callers grandfathered; new graph.v2 formulas must use drain)",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "1 warning  (existing callers grandfathered; new graph.v2 formulas must use drain)"
+    }
+  ],
+  "appState": {
+    "gridSize": null,
+    "viewBackgroundColor": "#ffffff"
+  }
+}

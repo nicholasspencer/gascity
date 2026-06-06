@@ -1,0 +1,381 @@
+{
+  "type": "excalidraw",
+  "version": 2,
+  "source": "https://excalidraw.com",
+  "elements": [
+    {
+      "id": "bg", "type": "rectangle",
+      "x": 0, "y": 0, "width": 1100, "height": 700,
+      "angle": 0, "strokeColor": "#dee2e6", "backgroundColor": "#f8f9fa",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 1, "version": 1, "versionNonce": 1,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "title", "type": "text",
+      "x": 550, "y": 14, "width": 900, "height": 28,
+      "angle": 0, "strokeColor": "#1e1e1e", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 2, "strokeStyle": "solid",
+      "roughness": 1, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 2, "version": 1, "versionNonce": 2,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "ga-iq13bl  ·  gc doctor: rig-root-branch Check — UX Design",
+      "fontSize": 22, "fontFamily": 3, "textAlign": "center", "verticalAlign": "top",
+      "containerId": null, "originalText": "ga-iq13bl  ·  gc doctor: rig-root-branch Check — UX Design"
+    },
+    {
+      "id": "sub", "type": "text",
+      "x": 550, "y": 48, "width": 900, "height": 18,
+      "angle": 0, "strokeColor": "#6c757d", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 3, "version": 1, "versionNonce": 3,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "SeverityAdvisory  ·  WarmupEligible=true  ·  CanFix=false  ·  Runs at gc start + gc doctor",
+      "fontSize": 15, "fontFamily": 3, "textAlign": "center", "verticalAlign": "top",
+      "containerId": null, "originalText": "SeverityAdvisory  ·  WarmupEligible=true  ·  CanFix=false  ·  Runs at gc start + gc doctor"
+    },
+    {
+      "id": "check-logic", "type": "rectangle",
+      "x": 20, "y": 90, "width": 300, "height": 260,
+      "angle": 0, "strokeColor": "#4a9eed", "backgroundColor": "#e7f5ff",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 10, "version": 1, "versionNonce": 10,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "check-logic-lbl", "type": "text",
+      "x": 35, "y": 100, "width": 200, "height": 18,
+      "angle": 0, "strokeColor": "#1971c2", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 11, "version": 1, "versionNonce": 11,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "Check Logic", "fontSize": 16, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "Check Logic"
+    },
+    {
+      "id": "step-skip-suspended", "type": "rectangle",
+      "x": 35, "y": 128, "width": 270, "height": 36,
+      "angle": 0, "strokeColor": "#adb5bd", "backgroundColor": "#dee2e6",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 12, "version": 1, "versionNonce": 12,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "1. Skip suspended rigs", "fontSize": 14, "color": "#495057"}
+    },
+    {
+      "id": "step-git-branch", "type": "rectangle",
+      "x": 35, "y": 174, "width": 270, "height": 36,
+      "angle": 0, "strokeColor": "#4a9eed", "backgroundColor": "#a5d8ff",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 13, "version": 1, "versionNonce": 13,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "2. git rev-parse --abbrev-ref HEAD", "fontSize": 14, "color": "#003a63"}
+    },
+    {
+      "id": "step-compare", "type": "rectangle",
+      "x": 35, "y": 220, "width": 270, "height": 36,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "#fff3bf",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 14, "version": 1, "versionNonce": 14,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "3. Compare vs rig.DefaultBranch", "fontSize": 14, "color": "#7c4a00"}
+    },
+    {
+      "id": "step-dirty", "type": "rectangle",
+      "x": 35, "y": 266, "width": 270, "height": 36,
+      "angle": 0, "strokeColor": "#c92a2a", "backgroundColor": "#ffc9c9",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 15, "version": 1, "versionNonce": 15,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "4. git status --porcelain (if mismatch)", "fontSize": 14, "color": "#6a1010"}
+    },
+    {
+      "id": "step-emit", "type": "rectangle",
+      "x": 35, "y": 312, "width": 270, "height": 36,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "#ffd8a8",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 16, "version": 1, "versionNonce": 16,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "5. Emit StatusWarning + FixHint", "fontSize": 14, "color": "#7c4a00"}
+    },
+    {
+      "id": "outputs-zone", "type": "rectangle",
+      "x": 340, "y": 90, "width": 740, "height": 250,
+      "angle": 0, "strokeColor": "#adb5bd", "backgroundColor": "#f1f3f5",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 20, "version": 1, "versionNonce": 20,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "outputs-lbl", "type": "text",
+      "x": 355, "y": 100, "width": 200, "height": 18,
+      "angle": 0, "strokeColor": "#495057", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 21, "version": 1, "versionNonce": 21,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "gc doctor output scenarios", "fontSize": 16, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "gc doctor output scenarios"
+    },
+    {
+      "id": "ok-scenario", "type": "rectangle",
+      "x": 355, "y": 128, "width": 700, "height": 42,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "#b2f2bb",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 22, "version": 1, "versionNonce": 22,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "[OK]  rig-root-branch  rig \"elder\" HEAD=main (matches default)", "fontSize": 14, "color": "#1a4731"}
+    },
+    {
+      "id": "warn-clean", "type": "rectangle",
+      "x": 355, "y": 180, "width": 700, "height": 52,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "#ffd8a8",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 23, "version": 1, "versionNonce": 23,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "[WARN advisory]  rig-root-branch  rig \"elder\" is on feature/fix-session-leak (expected: main)\n  Hint: git -C /path/to/elder checkout main", "fontSize": 13, "color": "#7c4a00"}
+    },
+    {
+      "id": "warn-dirty", "type": "rectangle",
+      "x": 355, "y": 242, "width": 700, "height": 64,
+      "angle": 0, "strokeColor": "#c92a2a", "backgroundColor": "#ffc9c9",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 24, "version": 1, "versionNonce": 24,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "[WARN advisory]  rig-root-branch  rig \"elder\" is on feature/fix-session-leak (expected: main)\n  working tree is dirty — git pull will fail\n  Hint: git -C /path/to/elder checkout main", "fontSize": 13, "color": "#6a1010"}
+    },
+    {
+      "id": "err-nogit", "type": "rectangle",
+      "x": 355, "y": 316, "width": 700, "height": 42,
+      "angle": 0, "strokeColor": "#868e96", "backgroundColor": "#dee2e6",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 25, "version": 1, "versionNonce": 25,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "label": {"text": "[WARN advisory]  rig-root-branch  rig \"elder\": git unavailable or path not a repo", "fontSize": 13, "color": "#495057"}
+    },
+    {
+      "id": "test-cases", "type": "rectangle",
+      "x": 20, "y": 380, "width": 500, "height": 200,
+      "angle": 0, "strokeColor": "#6741d9", "backgroundColor": "#e5dbff",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 30, "version": 1, "versionNonce": 30,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "test-lbl", "type": "text",
+      "x": 35, "y": 390, "width": 300, "height": 18,
+      "angle": 0, "strokeColor": "#3b0764", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 31, "version": 1, "versionNonce": 31,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "TestRigRootBranchCheck test cases:", "fontSize": 15, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "TestRigRootBranchCheck test cases:"
+    },
+    {
+      "id": "tc1", "type": "text",
+      "x": 35, "y": 418, "width": 470, "height": 18,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 32, "version": 1, "versionNonce": 32,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "(a) HEAD=main (default) -> StatusOK", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "(a) HEAD=main (default) -> StatusOK"
+    },
+    {
+      "id": "tc2", "type": "text",
+      "x": 35, "y": 442, "width": 470, "height": 18,
+      "angle": 0, "strokeColor": "#e67700", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 33, "version": 1, "versionNonce": 33,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "(b) HEAD=feature/* clean -> StatusWarning + FixHint", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "(b) HEAD=feature/* clean -> StatusWarning + FixHint"
+    },
+    {
+      "id": "tc3", "type": "text",
+      "x": 35, "y": 466, "width": 470, "height": 18,
+      "angle": 0, "strokeColor": "#c92a2a", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 34, "version": 1, "versionNonce": 34,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "(c) HEAD=feature/* dirty -> StatusWarning + dirty detail", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "(c) HEAD=feature/* dirty -> StatusWarning + dirty detail"
+    },
+    {
+      "id": "tc4", "type": "text",
+      "x": 35, "y": 490, "width": 470, "height": 18,
+      "angle": 0, "strokeColor": "#868e96", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 35, "version": 1, "versionNonce": 35,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "(d) path not a git repo -> StatusWarning (graceful)", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "(d) path not a git repo -> StatusWarning (graceful)"
+    },
+    {
+      "id": "tc5", "type": "text",
+      "x": 35, "y": 514, "width": 470, "height": 18,
+      "angle": 0, "strokeColor": "#495057", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 36, "version": 1, "versionNonce": 36,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "(e) suspended rig -> skipped (no result emitted)", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "(e) suspended rig -> skipped (no result emitted)"
+    },
+    {
+      "id": "a11y", "type": "rectangle",
+      "x": 540, "y": 380, "width": 540, "height": 200,
+      "angle": 0, "strokeColor": "#2f9e44", "backgroundColor": "#d3f9d8",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 40, "version": 1, "versionNonce": 40,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "a11y-lbl", "type": "text",
+      "x": 555, "y": 390, "width": 300, "height": 18,
+      "angle": 0, "strokeColor": "#1a4731", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 41, "version": 1, "versionNonce": 41,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "Accessibility / UX notes:", "fontSize": 15, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "Accessibility / UX notes:"
+    },
+    {
+      "id": "a11y-1", "type": "text",
+      "x": 555, "y": 418, "width": 510, "height": 18,
+      "angle": 0, "strokeColor": "#1a4731", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 42, "version": 1, "versionNonce": 42,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "- Prefix: [WARN advisory] distinguishes from [WARN] blocking", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "- Prefix: [WARN advisory] distinguishes from [WARN] blocking"
+    },
+    {
+      "id": "a11y-2", "type": "text",
+      "x": 555, "y": 442, "width": 510, "height": 18,
+      "angle": 0, "strokeColor": "#1a4731", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 43, "version": 1, "versionNonce": 43,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "- FixHint is a concrete command, not a description", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "- FixHint is a concrete command, not a description"
+    },
+    {
+      "id": "a11y-3", "type": "text",
+      "x": 555, "y": 466, "width": 510, "height": 18,
+      "angle": 0, "strokeColor": "#1a4731", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 44, "version": 1, "versionNonce": 44,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "- Dirty adds specific consequence: \"git pull will fail\"", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "- Dirty adds specific consequence: \"git pull will fail\""
+    },
+    {
+      "id": "a11y-4", "type": "text",
+      "x": 555, "y": 490, "width": 510, "height": 18,
+      "angle": 0, "strokeColor": "#1a4731", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 45, "version": 1, "versionNonce": 45,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "- WarmupEligible: surfaces early at gc start (proactive)", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "- WarmupEligible: surfaces early at gc start (proactive)"
+    },
+    {
+      "id": "a11y-5", "type": "text",
+      "x": 555, "y": 514, "width": 510, "height": 18,
+      "angle": 0, "strokeColor": "#1a4731", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 46, "version": 1, "versionNonce": 46,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "- Advisory severity: city continues, operator can proceed", "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "- Advisory severity: city continues, operator can proceed"
+    },
+    {
+      "id": "terminal-bg", "type": "rectangle",
+      "x": 10, "y": 600, "width": 1080, "height": 90,
+      "angle": 0, "strokeColor": "#1e1e1e", "backgroundColor": "#1e1e1e",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": {"type": 3}, "seed": 50, "version": 1, "versionNonce": 50,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false
+    },
+    {
+      "id": "t1", "type": "text",
+      "x": 30, "y": 610, "width": 900, "height": 18,
+      "angle": 0, "strokeColor": "#a9e34b", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 51, "version": 1, "versionNonce": 51,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "$ gc doctor",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "$ gc doctor"
+    },
+    {
+      "id": "t2", "type": "text",
+      "x": 30, "y": 632, "width": 950, "height": 18,
+      "angle": 0, "strokeColor": "#fcc419", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 52, "version": 1, "versionNonce": 52,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "[WARN advisory]  rig-root-branch  rig \"elder\" is on feature/fix-session-leak (expected: main)",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "[WARN advisory]  rig-root-branch  rig \"elder\" is on feature/fix-session-leak (expected: main)"
+    },
+    {
+      "id": "t3", "type": "text",
+      "x": 30, "y": 654, "width": 950, "height": 18,
+      "angle": 0, "strokeColor": "#fcc419", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 53, "version": 1, "versionNonce": 53,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "                           working tree is dirty -- git pull will fail",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "                           working tree is dirty -- git pull will fail"
+    },
+    {
+      "id": "t4", "type": "text",
+      "x": 30, "y": 676, "width": 950, "height": 18,
+      "angle": 0, "strokeColor": "#74c0fc", "backgroundColor": "transparent",
+      "fillStyle": "solid", "strokeWidth": 1, "strokeStyle": "solid",
+      "roughness": 0, "opacity": 100, "groupIds": [], "frameId": null,
+      "roundness": null, "seed": 54, "version": 1, "versionNonce": 54,
+      "isDeleted": false, "boundElements": null, "updated": 1, "link": null, "locked": false,
+      "text": "  Hint: git -C \"/path/to/elder\" checkout main",
+      "fontSize": 14, "fontFamily": 3, "textAlign": "left", "verticalAlign": "top",
+      "containerId": null, "originalText": "  Hint: git -C \"/path/to/elder\" checkout main"
+    }
+  ],
+  "appState": {
+    "gridSize": null,
+    "viewBackgroundColor": "#ffffff"
+  }
+}
