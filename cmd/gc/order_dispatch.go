@@ -30,6 +30,7 @@ import (
 	"github.com/gastownhall/gascity/internal/orderdiscovery"
 	"github.com/gastownhall/gascity/internal/orders"
 	"github.com/gastownhall/gascity/internal/processgroup"
+	"github.com/gastownhall/gascity/internal/suspensionstate"
 )
 
 const (
@@ -266,6 +267,7 @@ type memoryOrderDispatcher struct {
 	nextDispatchStart    int
 	cfg                  *config.City
 	cityName             string
+	cityPath             string
 	cacheMu              sync.Mutex
 	lastRunCache         map[string]time.Time
 
@@ -389,15 +391,21 @@ func buildOrderDispatcherFromOrderSet(cityPath string, cfg *config.City, allAA [
 		maxDispatchesPerTick: defaultMaxOrderDispatchesPerTick,
 		cfg:                  cfg,
 		cityName:             loadedCityName(cfg, cityPath),
+		cityPath:             cityPath,
 		dispatchCtx:          dispatchCtx,
 		dispatchCancel:       dispatchCancel,
 	}
 }
 
 func (m *memoryOrderDispatcher) dispatch(ctx context.Context, cityPath string, now time.Time) {
-	// Skip all order dispatch when the city is suspended.
-	if m.cfg != nil && citySuspended(m.cfg) {
-		return
+	// Skip all order dispatch when the city is suspended. Use the
+	// dispatcher's in-scope city path so suspension state resolves
+	// against the controlled city rather than the process cwd.
+	if m.cfg != nil {
+		st, _ := loadSuspensionState(fsys.OSFS{}, m.cityPath)
+		if citySuspendedWithState(m.cfg, st) {
+			return
+		}
 	}
 
 	stores := make(map[string]beads.Store)
@@ -1343,9 +1351,10 @@ func (m *memoryOrderDispatcher) rigSuspendedByName(rigName string) bool {
 	if rigName == "" {
 		return false
 	}
-	for _, r := range m.cfg.Rigs {
-		if r.Name == rigName {
-			return r.Suspended
+	suspState, _ := loadSuspensionState(fsys.OSFS{}, m.cityPath)
+	for i := range m.cfg.Rigs {
+		if m.cfg.Rigs[i].Name == rigName {
+			return suspensionstate.EffectiveRigSuspended(suspState, rigName, m.cfg.Rigs[i].EffectiveSuspendedOnStart())
 		}
 	}
 	return false

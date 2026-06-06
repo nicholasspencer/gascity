@@ -2549,7 +2549,9 @@ gc restart [path] [flags]
 
 ## gc resume
 
-Resume a suspended city by clearing workspace.suspended in city.toml.
+Resume a suspended city by recording an explicit "resumed" preference
+in .gc/runtime/suspension-state.json. The override sticks across city
+restarts even when [workspace] declares suspended_on_start = true.
 
 Restores normal operation: the reconciler will spawn agents again and
 gc hook/prime will return work. Use "gc agent resume" to resume
@@ -2687,7 +2689,9 @@ gc rig restart [name]
 
 ## gc rig resume
 
-Resume a suspended rig by clearing suspended in city.toml.
+Resume a suspended rig by recording an explicit "resumed" preference
+in .gc/runtime/suspension-state.json. The override sticks across city restarts
+even when the rig declares suspended_on_start = true.
 
 The reconciler will start the rig's agents on its next tick.
 
@@ -2753,11 +2757,15 @@ gc rig status [name] [flags]
 
 ## gc rig suspend
 
-Suspend a rig by setting suspended=true in city.toml.
+Suspend a rig by recording the suspension in the runtime state file
+(.gc/runtime/suspension-state.json).
 
 All agents scoped to the suspended rig are effectively suspended —
 the reconciler skips them and gc hook returns empty. The rig's beads
 database remains accessible. Use "gc rig resume" to restore.
+
+Suspension state is stored in the runtime directory, not city.toml,
+so it is local to this machine and does not need to be committed.
 
 ```
 gc rig suspend [name] [flags]
@@ -3638,7 +3646,9 @@ gc supervisor uninstall
 
 ## gc suspend
 
-Suspends the city by setting workspace.suspended = true in city.toml.
+Suspends the city by recording an explicit "suspended" preference
+in .gc/runtime/suspension-state.json (per-clone runtime state, not
+committed).
 
 This inherits downward — when the city is suspended, all agents are
 effectively suspended regardless of their individual suspended fields.

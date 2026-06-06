@@ -10,7 +10,9 @@ import (
 	"github.com/gastownhall/gascity/internal/agent"
 	"github.com/gastownhall/gascity/internal/beads"
 	"github.com/gastownhall/gascity/internal/config"
+	"github.com/gastownhall/gascity/internal/fsys"
 	"github.com/gastownhall/gascity/internal/session"
+	"github.com/gastownhall/gascity/internal/suspensionstate"
 	workdirutil "github.com/gastownhall/gascity/internal/workdir"
 )
 
@@ -71,6 +73,8 @@ func (s *Server) buildStatusBody() StatusBody {
 	sessionSnapshot := s.statusSessionSnapshot()
 	partialErrors := append([]string(nil), sessionSnapshot.partialErrors...)
 
+	citySt, _ := suspensionstate.Load(fsys.OSFS{}, s.state.CityPath())
+
 	// Count agents by state and collect per-agent detail rows in a single
 	// pass. Pool expansion emits one detail row per instance with a
 	// once-per-group ScaleLabel so the CLI's text formatter can indent the
@@ -80,7 +84,7 @@ func (s *Server) buildStatusBody() StatusBody {
 	agentDetails := make([]StatusAgentDetail, 0, len(cfg.Agents))
 	suspendedRigs := make(map[string]bool, len(cfg.Rigs))
 	for _, r := range cfg.Rigs {
-		if r.Suspended {
+		if suspensionstate.EffectiveRigSuspended(citySt, r.Name, r.EffectiveSuspendedOnStart()) {
 			suspendedRigs[r.Name] = true
 		}
 	}
@@ -154,7 +158,7 @@ func (s *Server) buildStatusBody() StatusBody {
 	rc := rigCounts{Total: len(cfg.Rigs)}
 	rigDetails := make([]StatusRigDetail, 0, len(cfg.Rigs))
 	for _, rig := range cfg.Rigs {
-		rigSuspended := rig.Suspended
+		rigSuspended := suspensionstate.EffectiveRigSuspended(citySt, rig.Name, rig.EffectiveSuspendedOnStart())
 		if !rigSuspended {
 			if total := perRigAgentTotals[rig.Name]; total > 0 && total == perRigAgentsSuspended[rig.Name] {
 				rigSuspended = true
@@ -252,7 +256,7 @@ func (s *Server) buildStatusBody() StatusBody {
 		DoltVersion:         versions.Dolt,
 		BeadsVersion:        versions.Beads,
 		UptimeSec:           uptime,
-		Suspended:           cfg.Workspace.Suspended,
+		Suspended:           suspensionstate.EffectiveCitySuspended(citySt, cfg.Workspace.EffectiveSuspendedOnStart()),
 		AgentCount:          ac.Total,
 		RigCount:            rc.Total,
 		Running:             rawRunning,

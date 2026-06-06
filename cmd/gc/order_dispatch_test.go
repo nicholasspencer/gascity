@@ -3062,7 +3062,7 @@ func TestOrderDispatchSkipsSuspendedRig(t *testing.T) {
 	// Mark the rig as suspended.
 	mad := ad.(*memoryOrderDispatcher)
 	mad.cfg = &config.City{
-		Rigs: []config.Rig{{Name: "demo", Path: "/tmp/demo", Suspended: true}},
+		Rigs: []config.Rig{{Name: "demo", Path: "/tmp/demo", SuspendedOnStart: true}},
 	}
 
 	ad.dispatch(context.Background(), t.TempDir(), time.Now())
@@ -3094,7 +3094,7 @@ func TestOrderDispatchSkipsSuspendedRigQualifiedPool(t *testing.T) {
 
 	mad := ad.(*memoryOrderDispatcher)
 	mad.cfg = &config.City{
-		Rigs: []config.Rig{{Name: "demo", Path: "/tmp/demo", Suspended: true}},
+		Rigs: []config.Rig{{Name: "demo", Path: "/tmp/demo", SuspendedOnStart: true}},
 	}
 
 	ad.dispatch(context.Background(), t.TempDir(), time.Now())
@@ -3156,7 +3156,7 @@ func TestOrderDispatchSkipsCitySuspended(t *testing.T) {
 	// Suspend the entire workspace.
 	mad := ad.(*memoryOrderDispatcher)
 	mad.cfg = &config.City{
-		Workspace: config.Workspace{Suspended: true},
+		Workspace: config.Workspace{SuspendedOnStart: true},
 	}
 
 	ad.dispatch(context.Background(), t.TempDir(), time.Now())
@@ -3185,7 +3185,7 @@ func TestOrderDispatchSkipsSuspendedRigExec(t *testing.T) {
 
 	mad := ad.(*memoryOrderDispatcher)
 	mad.cfg = &config.City{
-		Rigs: []config.Rig{{Name: "demo", Path: "/tmp/demo", Suspended: true}},
+		Rigs: []config.Rig{{Name: "demo", Path: "/tmp/demo", SuspendedOnStart: true}},
 	}
 
 	ad.dispatch(context.Background(), t.TempDir(), time.Now())
@@ -3201,7 +3201,7 @@ func TestOrderRigSuspended(t *testing.T) {
 	cfg := &config.City{
 		Rigs: []config.Rig{
 			{Name: "active", Path: "/tmp/active", Suspended: false},
-			{Name: "frozen", Path: "/tmp/frozen", Suspended: true},
+			{Name: "frozen", Path: "/tmp/frozen", SuspendedOnStart: true},
 		},
 	}
 	m := &memoryOrderDispatcher{cfg: cfg}
@@ -3238,7 +3238,7 @@ func TestOrderRigSuspended(t *testing.T) {
 func TestOrderRigSuspendedFallsBackToOrderRigOnPoolResolutionError(t *testing.T) {
 	cfg := &config.City{
 		Rigs: []config.Rig{
-			{Name: "frozen", Path: "/tmp/frozen", Suspended: true},
+			{Name: "frozen", Path: "/tmp/frozen", SuspendedOnStart: true},
 		},
 		Agents: []config.Agent{
 			{Name: "dog", Dir: "frozen", BindingName: "alpha"},

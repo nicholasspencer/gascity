@@ -2225,7 +2225,7 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 	// Use ComputeAwakeSet for the wake/sleep decision.
 	phaseStart = time.Now()
 	awakeInput := buildAwakeInputFromReconciler(
-		cfg, ordered, poolDesired, namedSessionDemand, workSet, readyWaitSet,
+		cfg, cityPath, ordered, poolDesired, namedSessionDemand, workSet, readyWaitSet,
 		assignedWorkBeads, wakeTargets, sp, clk.Now(),
 	)
 	awakeDecisions := ComputeAwakeSet(awakeInput)
