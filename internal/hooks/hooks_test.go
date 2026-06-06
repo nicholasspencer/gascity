@@ -53,7 +53,7 @@ func TestSupportedProviders(t *testing.T) {
 	got := SupportedProviders()
 	want := map[string]bool{
 		"claude": true, "codex": true, "gemini": true, "kiro": true, "opencode": true,
-		"cerebras": true, "copilot": true, "cursor": true, "pi": true, "omp": true,
+		"groq": true, "cerebras": true, "copilot": true, "cursor": true, "pi": true, "omp": true,
 	}
 	if len(got) != len(want) {
 		t.Fatalf("SupportedProviders() = %v, want %d entries", got, len(want))
@@ -1574,6 +1574,16 @@ func TestInstallCerebrasUsesOpenCodeOverlay(t *testing.T) {
 	}
 	if _, ok := fs.Files["/work/.opencode/plugins/gascity.js"]; !ok {
 		t.Fatal("expected Cerebras provider to materialize the OpenCode hook plugin")
+	}
+}
+
+func TestInstallGroqUsesOpenCodeOverlay(t *testing.T) {
+	fs := fsys.NewFake()
+	if err := Install(fs, "/city", "/work", []string{"groq"}); err != nil {
+		t.Fatalf("Install: %v", err)
+	}
+	if _, ok := fs.Files["/work/.opencode/plugins/gascity.js"]; !ok {
+		t.Fatal("expected Groq provider to materialize the OpenCode hook plugin")
 	}
 }
 

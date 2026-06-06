@@ -1130,7 +1130,7 @@ type Workspace struct {
 	// InstallAgentHooks lists provider names whose hooks should be installed
 	// into agent working directories. Agent-level overrides workspace-level
 	// (replace, not additive). Supported: "claude", "codex", "gemini",
-	// "kiro", "opencode", "copilot", "cursor", "pi", "omp".
+	// "kiro", "opencode", "groq", "copilot", "cursor", "pi", "omp".
 	InstallAgentHooks []string `toml:"install_agent_hooks,omitempty"`
 	// GlobalFragments lists named template fragments injected into every
 	// agent's rendered prompt. Applied before per-agent InjectFragments.
@@ -4467,7 +4467,7 @@ func DefaultCity(name string) City {
 
 func defaultInstallAgentHooksForProvider(provider string) []string {
 	switch strings.TrimSpace(provider) {
-	case "kiro", "opencode":
+	case "kiro", "opencode", "groq":
 		return []string{strings.TrimSpace(provider)}
 	default:
 		return nil
