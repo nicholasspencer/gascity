@@ -196,11 +196,22 @@ func cmdHookWithOptions(args []string, opts hookCommandOptions, stdout, stderr i
 
 	// A cross-store-eligible (city-scoped) agent federates its work query across
 	// all stores — its own first, then every rig store — matched on its own
-	// identity (vp-kvp stage iii). Rig agents get a single-entry list, so their
-	// behavior is byte-for-byte unchanged.
+	// identity (vp-kvp stage iii). A rig-scoped agent ("<rig>/<name>") instead
+	// queries its own <rig> store FIRST: its routed work lives there, but its
+	// city-scoped work-query env does not reach it, so without this the hook
+	// returns empty and the spawned session exits with nothing to do. The rig
+	// store goes first (as the primary entry, not a best-effort federated
+	// extra) so a rig-store work-query timeout still surfaces to the reconciler
+	// via firstStoreWithWork's emit-on-timeout contract — the agent's
+	// (work-less) city-scoped env stays as a best-effort secondary. This
+	// extends the #2877 city-scoped cross-store delivery to rig-scoped agents.
 	stores := []hookStore{{dir: workDir, env: queryEnv}}
 	if agentIsCrossStoreEligible(&a) {
 		stores = appendRigHookStores(stores, cityPath, cfg, &a, overrides)
+	} else if rig := rigScopedHookRig(cfg, agentForQuery); rig != "" {
+		if rigStores := appendOneRigHookStore(nil, cityPath, cfg, &a, rig, overrides); len(rigStores) > 0 {
+			stores = append(rigStores, stores...)
+		}
 	}
 
 	runner := func(command, _ string) (string, error) {
