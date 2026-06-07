@@ -45,12 +45,15 @@ const primeHookReadTimeout = 500 * time.Millisecond
 var primeStdin = func() *os.File { return os.Stdin }
 
 type primeHookInput struct {
-	Source string `json:"source"`
+	Source        string `json:"source"`
+	SessionID     string `json:"session_id"`
+	HookEventName string `json:"hook_event_name"`
 }
 
 type primeHookContext struct {
-	Source        string
-	HookEventName string
+	Source            string
+	HookEventName     string
+	ProviderSessionID string
 }
 
 // newPrimeCmd creates the "gc prime [agent-name]" command.
@@ -187,7 +190,7 @@ func doPrimeWithHookFormat(args []string, stdout, stderr io.Writer, hookMode boo
 		if !hookMode {
 			return
 		}
-		persistPrimeHookProviderSessionKey()
+		persistPrimeHookProviderSessionKey(hookContext.ProviderSessionID)
 	}
 	if !strictMode {
 		runHookSideEffects()
@@ -473,20 +476,18 @@ func readPrimeHookContext() primeHookContext {
 		Source:        strings.TrimSpace(os.Getenv("GC_HOOK_SOURCE")),
 		HookEventName: strings.TrimSpace(os.Getenv("GC_HOOK_EVENT_NAME")),
 	}
-	if shouldReadPrimeHookStdin() {
-		if input := readPrimeHookStdin(); input != nil {
-			if source := strings.TrimSpace(input.Source); source != "" {
-				ctx.Source = source
-			}
+	if input := readPrimeHookStdin(); input != nil {
+		if source := strings.TrimSpace(input.Source); source != "" {
+			ctx.Source = source
+		}
+		if event := strings.TrimSpace(input.HookEventName); event != "" {
+			ctx.HookEventName = event
+		}
+		if providerSessionID := strings.TrimSpace(input.SessionID); providerSessionID != "" {
+			ctx.ProviderSessionID = providerSessionID
 		}
 	}
 	return ctx
-}
-
-func shouldReadPrimeHookStdin() bool {
-	hasEnvSessionID := strings.TrimSpace(os.Getenv("GC_SESSION_ID")) != "" ||
-		strings.TrimSpace(os.Getenv("CLAUDE_SESSION_ID")) != ""
-	return !hasEnvSessionID
 }
 
 func readPrimeHookStdin() *primeHookInput {
@@ -530,11 +531,16 @@ func readPrimeHookStdin() *primeHookInput {
 	return &input
 }
 
-func persistPrimeHookProviderSessionKey() {
+func persistPrimeHookProviderSessionKey(hookProviderSessionID string) {
 	gcSessionID := strings.TrimSpace(os.Getenv("GC_SESSION_ID"))
 	providerSessionID := strings.TrimSpace(os.Getenv("GC_PROVIDER_SESSION_ID"))
 	if providerSessionID == "" {
 		providerSessionID = strings.TrimSpace(os.Getenv("GEMINI_SESSION_ID"))
+	}
+	fromHookStdin := false
+	if providerSessionID == "" {
+		providerSessionID = strings.TrimSpace(hookProviderSessionID)
+		fromHookStdin = providerSessionID != ""
 	}
 	if gcSessionID == "" || providerSessionID == "" || gcSessionID == providerSessionID {
 		return
@@ -549,6 +555,9 @@ func persistPrimeHookProviderSessionKey() {
 	}
 	sessionBead, err := store.Get(gcSessionID)
 	if err != nil {
+		return
+	}
+	if fromHookStdin && sessionProviderFamily(sessionBead) != "codex" {
 		return
 	}
 	if existing := strings.TrimSpace(sessionBead.Metadata["session_key"]); existing != "" {
