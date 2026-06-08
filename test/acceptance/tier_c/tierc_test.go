@@ -446,7 +446,11 @@ func setupThrowawayRepo(t *testing.T) string {
 	t.Helper()
 	root := t.TempDir()
 	originDir := filepath.Join(root, "origin.git")
-	repoDir := filepath.Join(root, "repo")
+	// Derive a unique name from the test name so each test gets a distinct
+	// Dolt DB prefix. All tests share the same DOLT_ROOT_PATH; a hardcoded
+	// "repo" name would give every test the "re" prefix, causing bd init to
+	// fail on pre-existing dirty tables when a prior test's supervisor crashed.
+	repoDir := filepath.Join(root, uniqueRigName(t.Name()))
 	if err := os.MkdirAll(root, 0o755); err != nil {
 		t.Fatal(err)
 	}
@@ -462,6 +466,41 @@ func setupThrowawayRepo(t *testing.T) string {
 	gitCmd(t, repoDir, "commit", "-m", "initial commit")
 	gitCmd(t, repoDir, "push", "-u", "origin", "main")
 	return repoDir
+}
+
+// uniqueRigName returns a short rig directory name derived from the test name.
+// It produces a name of ≤3 chars (CamelCase initials of the last _-component),
+// which DeriveBeadsPrefix returns unchanged as the Dolt DB prefix. This ensures
+// tests sharing the same DOLT_ROOT_PATH get distinct databases and bd init cannot
+// encounter pre-existing dirty tables left by a previous test's crashed supervisor.
+func uniqueRigName(testName string) string {
+	// Use the last _-separated component, e.g. "TestGastown_PolecatLifecycle" → "PolecatLifecycle".
+	if i := strings.LastIndex(testName, "_"); i >= 0 {
+		testName = testName[i+1:]
+	} else if strings.HasPrefix(testName, "Test") {
+		testName = testName[4:]
+	}
+	// Extract CamelCase initials as lowercase.
+	var initials strings.Builder
+	for i, r := range testName {
+		if i == 0 || (r >= 'A' && r <= 'Z') {
+			if r >= 'A' && r <= 'Z' {
+				initials.WriteByte(byte(r - 'A' + 'a'))
+			} else {
+				initials.WriteRune(r)
+			}
+		}
+	}
+	abbrev := initials.String()
+	if abbrev == "" {
+		return "rig"
+	}
+	// ≤3 chars: DeriveBeadsPrefix returns it as-is → unique DB prefix.
+	// >3 chars: truncate to 3 (still unique among the small set of tests here).
+	if len(abbrev) > 3 {
+		abbrev = abbrev[:3]
+	}
+	return abbrev
 }
 
 func newGastownAcceptanceCity(t *testing.T) *helpers.City {
