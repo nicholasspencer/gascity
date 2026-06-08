@@ -2149,11 +2149,25 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 			}
 		}
 
-		// Idle timeout: restart sessions idle longer than configured threshold.
+		// Idle timeout / pool-seat reap: stop sessions idle longer than the
+		// configured threshold (idle_timeout), and — for ephemeral pool seats —
+		// reap promptly after a short debounce once they own no claimed work.
 		// Pass the agent template so the tracker can fall back to a per-template
 		// timeout for pool sessions whose bead-derived runtime names are not
 		// registered directly.
-		if it != nil && alive && it.checkIdle(name, tp.TemplateName, sp, clk.Now()) {
+		idleKill := it != nil && it.checkIdle(name, tp.TemplateName, sp, clk.Now())
+		// An ephemeral "one step per run" seat that finished
+		// its step but never exited leaks its pool slot. Reap it on a short
+		// debounce. Cheap in-memory idle check here; the claim-state store query
+		// is lazy (below) so we don't add per-tick dolt load (a busy shared dolt store).
+		ephemeralReap := isEphemeralSessionBead(*session) && ephemeralSeatIdlePastReapDebounce(sp, name, clk)
+		if alive && (idleKill || ephemeralReap) {
+			reapReason := "idle-timeout"
+			decisionReason := "idle_timeout"
+			if ephemeralReap && !idleKill {
+				reapReason = "reaped-completed"
+				decisionReason = "reaped_completed"
+			}
 			blocker := lifecycleTimerBlocker(session.Metadata, clk.Now())
 			switch {
 			case blocker != "":
@@ -2176,32 +2190,52 @@ func reconcileSessionBeadsTracedWithNamedDemand(
 				}
 				continue
 			default:
-				fmt.Fprintf(stderr, "session reconciler: idle timeout for %s\n", tp.DisplayName()) //nolint:errcheck // best-effort stderr
-				if trace != nil {
-					trace.recordDecision("reconciler.session.idle_timeout", tp.TemplateName, name, "idle_timeout", "stop", nil, nil, "")
+				// CLAIM-STATE GUARD (load-bearing):
+				// never reap/idle-kill a seat that owns an in_progress claimed
+				// step — e.g. a critique seat mid-grade whose last-activity has
+				// gone stale during a long model call. Computed lazily (a store
+				// query) only now that a stop is otherwise warranted, to avoid
+				// per-tick dolt load.
+				hasInProgress, ipErr := sessionHasInProgressClaimedWorkForReachableStore(cityPath, cfg, store, rigStores, *session)
+				if ipErr != nil {
+					// Fail closed: a transient store blip must not kill a seat
+					// that may hold in-flight work. Mirrors the max-age path.
+					fmt.Fprintf(stderr, "session reconciler: checking claimed work for idle %s: %v\n", name, ipErr) //nolint:errcheck // best-effort stderr
+					hasInProgress = true
 				}
-				if err := workerKillSessionTargetWithConfig("", store, sp, cfg, name); err != nil {
-					fmt.Fprintf(stderr, "session reconciler: stopping idle %s: %v\n", name, err) //nolint:errcheck // best-effort stderr
-				} else {
-					_ = sp.ClearScrollback(name)
-					rec.Record(events.Event{
-						Type:    events.SessionIdleKilled,
-						Actor:   "gc",
-						Subject: tp.DisplayName(),
-					})
-					telemetry.RecordAgentIdleKill(context.Background(), tp.DisplayName())
-					// Mark for immediate re-wake on this same tick by clearing
-					// last_woke_at and setting state to asleep. The wake logic
-					// below will pick it up.
-					batch := sessionpkg.SleepPatch(clk.Now(), "idle-timeout")
-					_ = store.SetMetadataBatch(session.ID, batch)
-					if session.Metadata == nil {
-						session.Metadata = make(map[string]string, len(batch))
+				switch {
+				case hasInProgress:
+					if trace != nil {
+						trace.recordDecision("reconciler.session.idle_timeout", tp.TemplateName, name, "claimed_work", "deferred_busy", nil, nil, "")
 					}
-					for key, value := range batch {
-						session.Metadata[key] = value
+				default:
+					fmt.Fprintf(stderr, "session reconciler: %s for %s\n", decisionReason, tp.DisplayName()) //nolint:errcheck // best-effort stderr
+					if trace != nil {
+						trace.recordDecision("reconciler.session.idle_timeout", tp.TemplateName, name, decisionReason, "stop", nil, nil, "")
 					}
-					alive = false
+					if err := workerKillSessionTargetWithConfig("", store, sp, cfg, name); err != nil {
+						fmt.Fprintf(stderr, "session reconciler: stopping idle %s: %v\n", name, err) //nolint:errcheck // best-effort stderr
+					} else {
+						_ = sp.ClearScrollback(name)
+						rec.Record(events.Event{
+							Type:    events.SessionIdleKilled,
+							Actor:   "gc",
+							Subject: tp.DisplayName(),
+						})
+						telemetry.RecordAgentIdleKill(context.Background(), tp.DisplayName())
+						// Mark for immediate re-wake on this same tick by clearing
+						// last_woke_at and setting state to asleep. The wake logic
+						// below will pick it up.
+						batch := sessionpkg.SleepPatch(clk.Now(), reapReason)
+						_ = store.SetMetadataBatch(session.ID, batch)
+						if session.Metadata == nil {
+							session.Metadata = make(map[string]string, len(batch))
+						}
+						for key, value := range batch {
+							session.Metadata[key] = value
+						}
+						alive = false
+					}
 				}
 			}
 			// Fall through to wakeReasons — it will re-wake immediately if config present
@@ -2640,6 +2674,34 @@ func sessionHasOpenAssignedWorkForReachableStore(
 	return sessionHasOpenAssignedWorkInStoreByIdentifiers(rigStore, identifiers)
 }
 
+// sessionHasInProgressClaimedWorkForReachableStore mirrors
+// sessionHasOpenAssignedWorkForReachableStore but checks ONLY in_progress
+// (claimed) work — the pool-seat reaper's "never reap a seat that owns a
+// claimed step" guard. A seat mid-step (e.g. a critique seat in a long model
+// call whose last-activity has gone stale) holds an in_progress step and must
+// never be reaped; a seat with only open/routed work, or nothing, is reapable.
+func sessionHasInProgressClaimedWorkForReachableStore(
+	cityPath string,
+	cfg *config.City,
+	store beads.Store,
+	rigStores map[string]beads.Store,
+	session beads.Bead,
+) (bool, error) {
+	identifiers := sessionAssignmentIdentifiersForConfig(session, cfg)
+	storeRef, ok := assignedWorkStoreRefForSession(cityPath, cfg, session)
+	if !ok {
+		return sessionHasInProgressClaimedWorkInStores(store, rigStores, identifiers)
+	}
+	if storeRef == "" {
+		return sessionHasInProgressClaimedWorkInStoreByIdentifiers(store, identifiers)
+	}
+	rigStore, ok := rigStores[storeRef]
+	if !ok || rigStore == nil {
+		return false, fmt.Errorf("rig store %q unavailable for session %q", storeRef, session.Metadata["session_name"])
+	}
+	return sessionHasInProgressClaimedWorkInStoreByIdentifiers(rigStore, identifiers)
+}
+
 // sessionHasAwakeAssignedWorkForReachableStore reports whether assigned work
 // should keep a session awake: in-progress work always counts, while open work
 // counts only when it is ready: unblocked, not deferred, and not ready-excluded.
@@ -2997,6 +3059,48 @@ func sessionHasAwakeAssignedWorkInStores(store beads.Store, rigStores map[string
 		}
 	}
 	return false, nil
+}
+
+// sessionHasInProgressClaimedWorkInStoreByIdentifiers reports whether the
+// session OWNS a claimed (in_progress) work bead — the in_progress-only variant
+// of the assigned-work check, built on the shared status-filtered leaf.
+func sessionHasInProgressClaimedWorkInStoreByIdentifiers(store beads.Store, identifiers []string) (bool, error) {
+	return sessionHasAssignedWorkInStoreByIdentifiersForStatuses(store, identifiers, []string{"in_progress"})
+}
+
+func sessionHasInProgressClaimedWorkInStores(store beads.Store, rigStores map[string]beads.Store, identifiers []string) (bool, error) {
+	if has, err := sessionHasInProgressClaimedWorkInStoreByIdentifiers(store, identifiers); err != nil || has {
+		return has, err
+	}
+	for _, rs := range rigStores {
+		if has, err := sessionHasInProgressClaimedWorkInStoreByIdentifiers(rs, identifiers); err != nil || has {
+			return has, err
+		}
+	}
+	return false, nil
+}
+
+// ephemeralReapDebounce is the short idle window after which an ephemeral pool
+// seat that owns no claimed (in_progress) work is reaped (the leaked-slot fix:
+// an ephemeral "one step per run" seat that finished its step but never exited,
+// leaking its slot). Distinct from the per-template idle_timeout (hours), which
+// is the slow backstop. Short so a finished seat frees its
+// slot promptly; long enough that a freshly-spawned seat can claim its routed
+// step before this fires.
+const ephemeralReapDebounce = 15 * time.Second
+
+// ephemeralSeatIdlePastReapDebounce reports whether the seat's last observed
+// activity is older than ephemeralReapDebounce. It reads the runtime provider's
+// activity timestamp (no store/dolt round-trip), so it is cheap to evaluate
+// every tick — the load-bearing claim-state check is done lazily only after
+// this gate passes. A zero/unknown timestamp returns false: be conservative and
+// never reap a seat we cannot prove is idle.
+func ephemeralSeatIdlePastReapDebounce(sp runtime.Provider, name string, clk clock.Clock) bool {
+	la, err := workerSessionTargetLastActivityWithConfig("", nil, sp, nil, name)
+	if err != nil || la.IsZero() {
+		return false
+	}
+	return clk.Now().Sub(la) > ephemeralReapDebounce
 }
 
 func sessionHasOpenAssignedWorkInStoreByIdentifiers(store beads.Store, identifiers []string) (bool, error) {
