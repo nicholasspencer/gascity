@@ -809,7 +809,7 @@ func buildPreparedStartWithWorkDirResolver(
 	// Explicit session template_overrides still win per key.
 	dispatchOptions := resolveTaskOptionOverrides(store, tp.ResolvedProvider, taskWorkDirAssignees(candidate, cfg)...)
 	if len(dispatchOptions) > 0 {
-		launchOverrides := make(map[string]string, len(dispatchOptions)+len(sessionOverrides))
+		launchOverrides := make(map[string]string, len(dispatchOptions))
 		for k, v := range dispatchOptions {
 			launchOverrides[k] = v
 		}
@@ -975,7 +975,7 @@ func applySchemaOptionOverridesForLaunch(agentCfg *runtime.Config, tp *TemplateP
 	if resolved == nil || len(resolved.OptionsSchema) == 0 {
 		return
 	}
-	fullOptions := make(map[string]string, len(resolved.EffectiveDefaults)+len(overrides))
+	fullOptions := make(map[string]string, len(resolved.EffectiveDefaults))
 	hasSchemaOverride := false
 	for k, v := range resolved.EffectiveDefaults {
 		fullOptions[k] = v
