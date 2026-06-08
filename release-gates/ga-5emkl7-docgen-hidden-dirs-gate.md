@@ -5,6 +5,7 @@ Deployer: gascity/deployer
 Deploy bead: ga-5emkl7
 Source bug: ga-79qhoy
 Review bead: ga-onhynn
+PR: https://github.com/gastownhall/gascity/pull/3255
 Feature branch: builder/ga-79qhoy
 Reviewed commit: 72e838e125a49dc617ba0cfbe9bfda647c550e8e
 Base checked: origin/main at 544bf47df80e63abff7b30553e1407f435d6e264
