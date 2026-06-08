@@ -19,7 +19,7 @@ commands documented in TESTING.md.
 |---|-----------|--------|----------|
 | 1 | Review PASS present | PASS | Review bead ga-fez44r is closed with close reason `pass` and notes contain `REVIEWER VERDICT: PASS`. |
 | 2 | Acceptance criteria met | PASS | `go test ./cmd/gc -run TestMailArchiveManyJSONEmitsBatchShape -count=1` passed; `go test ./internal/mail/exec -run TestArchiveDoesNotConsumeCallerStdin -count=1` passed. The tests assert batch JSON archive shape and exec-provider stdin isolation. |
-| 3 | Tests pass | PASS | `make test-fast-parallel` passed all fast jobs; `go vet ./...` completed cleanly. GitHub PR #3238 checks were also green at gate time. |
+| 3 | Tests pass | PASS | `make test-fast-parallel` passed all fast jobs; `go vet ./...` completed cleanly. |
 | 4 | No high-severity review findings open | PASS | Review bead ga-fez44r lists no unresolved HIGH findings. GitHub PR #3238 has no review comments or reviews. |
 | 5 | Final branch is clean | PASS | Clean deploy worktree at PR head before gate file creation; final clean status verified after the gate commit. |
 | 6 | Branch diverges cleanly from main | PASS | `git merge-tree --write-tree origin/main HEAD` completed successfully after the gate commit. GitHub reports PR #3238 merge state `CLEAN`. |
