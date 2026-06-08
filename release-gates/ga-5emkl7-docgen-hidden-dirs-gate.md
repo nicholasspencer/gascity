@@ -9,6 +9,7 @@ PR: https://github.com/gastownhall/gascity/pull/3255
 Feature branch: builder/ga-79qhoy
 Reviewed commit: 72e838e125a49dc617ba0cfbe9bfda647c550e8e
 Base checked: origin/main at 544bf47df80e63abff7b30553e1407f435d6e264
+Post-push base rechecked: origin/main at 4111f8fb55fa24afec413719519b385014f15310
 
 Note: `docs/PROJECT_MANIFEST.md` is not present in this checkout. This gate
 uses the deployer release criteria from the active Gas City deployer prompt.
@@ -22,7 +23,7 @@ uses the deployer release criteria from the active Gas City deployer prompt.
 | 3 | Tests pass | PASS | Focused docgen regression passed; `make test` passed with observable log `/tmp/gascity-test.jsonl.ELhVPS`; `go vet ./...` passed; `go build ./cmd/gc` passed. |
 | 4 | No high-severity review findings open | PASS | Review notes list PASS for style, design, security, and test coverage. No blockers or high-severity findings are listed. Unresolved HIGH count: 0. |
 | 5 | Final branch is clean | PASS | Feature worktree `builder/worktrees/ga-79qhoy` was clean before writing this gate: `git status --short --branch` reported only `## builder/ga-79qhoy...origin/builder/ga-79qhoy`. Final cleanliness is rechecked after committing this gate file. |
-| 6 | Branch diverges cleanly from main | PASS | `git merge-tree $(git merge-base origin/main builder/ga-79qhoy) origin/main builder/ga-79qhoy` completed with a merged result and no conflict markers. `git diff --check origin/main...builder/ga-79qhoy` produced no output. |
+| 6 | Branch diverges cleanly from main | PASS | `git merge-tree $(git merge-base origin/main builder/ga-79qhoy) origin/main builder/ga-79qhoy` completed with a merged result and no conflict markers against initial base `544bf47df80e63abff7b30553e1407f435d6e264` and post-push base `4111f8fb55fa24afec413719519b385014f15310`. `git diff --check origin/main...builder/ga-79qhoy` produced no output. |
 | 7 | Single feature theme | PASS | The commit set touches only `internal/docgen/schema.go` and `internal/docgen/schema_test.go`; one subsystem and one behavior: schema generation no longer walks transient hidden runtime directories. |
 
 ## Acceptance Evidence
